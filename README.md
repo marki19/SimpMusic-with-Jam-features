@@ -32,13 +32,12 @@ A FOSS YouTube Music client for Android and Desktop with many features from<br>S
 - Notifications from followed artists    
 - Caching and offline playback support    
 - Crossfade with DJ-style like Apple Music (NEW)
-- Customizing THEME (Light, Dark, Color, etc) (NEW)
 - Synced lyrics from SimpMusic Lyrics, LRCLIB, Spotify (require login) and YouTube Transcript - AI lyrics translation (BETA) (\*)  
 - Personalize data (\**) and multi-YouTube-account support    
 - Local "scrobble" like Last.fm (NEW)
 - Supports SponsorBlock and Return YouTube Dislike
 - Sleep Timer    
-- Android Auto with online content, feature rich UI/UX (NEW)
+- Android Auto with online content
 - Discord Rich Presence support
 - And many more!    
   
