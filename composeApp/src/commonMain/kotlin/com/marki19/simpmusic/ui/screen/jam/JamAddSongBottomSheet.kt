@@ -111,11 +111,9 @@ fun JamAddSongBottomSheet(
                                     isPlaying = false,
                                     onClickListener = {
                                         jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                        onDismissRequest()
                                     },
                                     onAddToQueue = {
                                         jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                        onDismissRequest()
                                     }
                                 )
                             }
@@ -137,8 +135,7 @@ fun JamAddSongBottomSheet(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.StartToEnd) {
                                         jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
-                                        onDismissRequest()
-                                        true
+                                        false
                                     } else false
                                 }
                              )
@@ -164,11 +161,9 @@ fun JamAddSongBottomSheet(
                                      isPlaying = false,
                                      onClickListener = {
                                           jamViewModel.playNow(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
-                                         onDismissRequest()
                                      },
                                      onAddToQueue = {
                                           jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
-                                         onDismissRequest()
                                      }
                                  )
                              }

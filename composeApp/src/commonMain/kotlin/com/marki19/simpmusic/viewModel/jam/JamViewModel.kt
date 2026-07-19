@@ -14,11 +14,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
 class JamViewModel(
     private val jamRepository: JamRepository,
     private val songRepository: SongRepository,
@@ -52,21 +53,24 @@ class JamViewModel(
 
     init {
         viewModelScope.launch {
+            var previousState: JamSessionState? = null
             sessionState.collect { state ->
                 _isConnecting.value = state == null && _isConnecting.value
                 if (state != null) {
                     _isConnecting.value = false
                     _isSyncing.value = state.isSyncing
-                    // Surface host-transfer notice from session state
                     if (state.newHostNotice != null) {
                         _hostTransferNotice.value = state.newHostNotice
                     }
-                    syncTaste()
-                    startHeartbeat()
+                    if (previousState == null) {
+                        syncTaste()
+                        startHeartbeat()
+                    }
                 } else {
                     stopHeartbeat()
                     _hostTransferNotice.value = null
                 }
+                previousState = state
             }
         }
     }
@@ -75,7 +79,7 @@ class JamViewModel(
         heartbeatJob?.cancel()
         heartbeatJob = viewModelScope.launch {
             while (isActive) {
-                kotlinx.coroutines.delay(5 * 60 * 1000L) // 5 minutes
+                kotlinx.coroutines.delay(5.minutes) // 5 minutes
                 jamRepository.sendCommand(JamCommand.Ping)
             }
         }
@@ -94,9 +98,20 @@ class JamViewModel(
 
     private fun syncTaste() {
         viewModelScope.launch {
-            val topSongs = songRepository.getMostPlayedSongs().first().take(20)
-            val videoIds = topSongs.map { it.videoId }
-            jamRepository.sendCommand(JamCommand.ShareTaste(videoIds))
+            var topSongs = songRepository.getMostPlayedSongs().firstOrNull() ?: emptyList()
+            if (topSongs.isEmpty()) {
+                topSongs = songRepository.getRecentSong(20, 0)
+            }
+            if (topSongs.isEmpty()) {
+                topSongs = songRepository.getLikedSongs().firstOrNull() ?: emptyList()
+            }
+            val videoIds = topSongs.take(20).map { it.videoId }
+            if (videoIds.isNotEmpty()) {
+                jamRepository.sendCommand(JamCommand.ShareTaste(videoIds))
+            } else {
+                // Fallback to some default popular tracks if the user has a completely empty history
+                jamRepository.sendCommand(JamCommand.ShareTaste(listOf("dQw4w9WgXcQ", "kJQP7kiw5Fk", "fJ9rUzIMcZQ")))
+            }
         }
     }
 
@@ -138,10 +153,6 @@ class JamViewModel(
 
     // ── Queue actions ─────────────────────────────────────────────────────────
 
-    fun skipTo(index: Int) {
-        viewModelScope.launch { jamRepository.sendCommand(JamCommand.SkipTo(index)) }
-    }
-
     fun removeFromQueue(queueId: String) {
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.RemoveQueueItem(queueId)) }
     }
@@ -156,7 +167,7 @@ class JamViewModel(
                 durationMs = durationMs
             ))
         }
-    }
+    };
 
     fun playNow(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
         viewModelScope.launch {

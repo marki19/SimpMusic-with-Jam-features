@@ -350,25 +350,6 @@ fun JamSessionScreen(
                             modifier = Modifier.animateItem(),
                         )
                     }
-                } else if (isHost && !session.recommendationsEnabled) {
-                    item(key = "recs_disabled") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Recommendations off",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            TextButton(onClick = { viewModel.toggleRecommendations(true) }) {
-                                Text("Enable")
-                            }
-                        }
-                    }
                 }
 
                 item { Spacer(modifier = Modifier.height(120.dp)) }

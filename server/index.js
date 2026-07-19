@@ -466,6 +466,20 @@ wss.on('connection', (ws) => {
                             break;
                         }
 
+                        case 'UPDATE_PERMISSIONS': {
+                            if (!isHost) break;
+                            if (msg.payload) {
+                                session.permissions = { ...session.permissions, ...msg.payload };
+                            }
+                            broadcast(currentRoomId, {
+                                type: 'PERMISSIONS_UPDATED',
+                                payload: {
+                                    permissions: session.permissions
+                                }
+                            });
+                            break;
+                        }
+
                         case 'REFRESH_RECOMMENDATIONS': {
                             if (!isHost) break;
                             session.recommendations = buildRecommendations(session.tastes, session.queue);
