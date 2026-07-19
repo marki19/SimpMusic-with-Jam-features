@@ -246,17 +246,21 @@ wss.on('connection', (ws) => {
                     sendTo(ws, {
                         type: 'SESSION_JOINED',
                         roomId,
-                        hostId: session.hostId,
-                        state: session.state,
-                        permissions: session.permissions,
-                        queue: fullQueuePayload(session),
-                        recommendationsEnabled: session.recommendationsEnabled,
-                        participants: getParticipantsList(session),
+                        payload: {
+                            hostId: session.hostId,
+                            state: session.state,
+                            permissions: session.permissions,
+                            queue: fullQueuePayload(session),
+                            recommendationsEnabled: session.recommendationsEnabled,
+                            participants: getParticipantsList(session),
+                        }
                     });
 
                     broadcast(roomId, { 
                         type: 'PARTICIPANTS_UPDATED', 
-                        participants: getParticipantsList(session) 
+                        payload: {
+                            participants: getParticipantsList(session) 
+                        }
                     });
                     console.log(`[Jam] ${userId} joined room ${roomId}`);
                     break;
@@ -268,8 +272,8 @@ wss.on('connection', (ws) => {
                     const session = sessions.get(currentRoomId);
                     if (!session || session.hostId !== currentUserId) return;
 
-                    session.permissions = { ...session.permissions, ...msg.permissions };
-                    broadcast(currentRoomId, { type: 'PERMISSIONS_UPDATED', permissions: session.permissions });
+                    session.permissions = { ...session.permissions, ...msg.payload?.permissions };
+                    broadcast(currentRoomId, { type: 'PERMISSIONS_UPDATED', payload: { permissions: session.permissions } });
                     break;
                 }
 
@@ -281,12 +285,12 @@ wss.on('connection', (ws) => {
 
                     session.state = {
                         ...session.state,
-                        ...msg.state,
+                        ...msg.payload?.state,
                         serverTimestampMs: Date.now(),
                     };
                     broadcast(currentRoomId, {
                         type: 'STATE_SYNC',
-                        state: session.state,
+                        payload: { state: session.state },
                     }, ws);
                     break;
                 }
@@ -351,12 +355,19 @@ wss.on('connection', (ws) => {
                                 );
                             }
 
-                            broadcast(currentRoomId, {
+                                                        broadcast(currentRoomId, {
                                 type: 'QUEUE_UPDATED',
-                                queue: fullQueuePayload(session),
-                                reason: 'SONG_ADDED',
-                                queueId: newItem.queueId,
-                                addedBy: currentUserId,
+                                payload: {
+                                    queue: fullQueuePayload(session),
+                                    reason: 'SONG_ADDED',
+                                    queueId: newItem.queueId,
+                                    videoId: newItem.videoId,
+                                    title: newItem.title,
+                                    artist: newItem.artist,
+                                    thumbnailUrl: newItem.thumbnailUrl,
+                                    durationMs: newItem.durationMs,
+                                    addedBy: currentUserId,
+                                }
                             });
                             break;
                         }
@@ -378,9 +389,11 @@ wss.on('connection', (ws) => {
 
                             broadcast(currentRoomId, {
                                 type: 'QUEUE_UPDATED',
-                                queue: fullQueuePayload(session),
-                                reason: 'SONG_REMOVED',
-                                queueId,
+                                payload: {
+                                    queue: fullQueuePayload(session),
+                                    reason: 'SONG_REMOVED',
+                                    queueId,
+                                }
                             });
                             break;
                         }
@@ -401,10 +414,12 @@ wss.on('connection', (ws) => {
 
                             broadcast(currentRoomId, {
                                 type: 'QUEUE_UPDATED',
-                                queue: fullQueuePayload(session),
-                                reason: 'SONG_MOVED',
-                                queueId,
-                                toIndex: clampedTo,
+                                payload: {
+                                    queue: fullQueuePayload(session),
+                                    reason: 'SONG_MOVED',
+                                    queueId,
+                                    toIndex: clampedTo,
+                                }
                             });
                             break;
                         }
@@ -424,9 +439,11 @@ wss.on('connection', (ws) => {
 
                             broadcast(currentRoomId, {
                                 type: 'VOTE_UPDATED',
-                                queueId,
-                                voteCount: voters.size,
-                                voterIds: [...voters],
+                                payload: {
+                                    queueId,
+                                    voteCount: voters.size,
+                                    voterIds: [...voters],
+                                }
                             });
                             break;
                         }
@@ -441,8 +458,10 @@ wss.on('connection', (ws) => {
                             }
                             broadcast(currentRoomId, {
                                 type: 'RECOMMENDATIONS_UPDATED',
-                                enabled,
-                                recommendations: session.recommendations,
+                                payload: {
+                                    enabled,
+                                    recommendations: session.recommendations,
+                                }
                             });
                             break;
                         }
@@ -452,8 +471,10 @@ wss.on('connection', (ws) => {
                             session.recommendations = buildRecommendations(session.tastes, session.queue);
                             broadcast(currentRoomId, {
                                 type: 'RECOMMENDATIONS_UPDATED',
-                                enabled: session.recommendationsEnabled,
-                                recommendations: session.recommendations,
+                                payload: {
+                                    enabled: session.recommendationsEnabled,
+                                    recommendations: session.recommendations,
+                                }
                             });
                             break;
                         }
@@ -465,8 +486,10 @@ wss.on('connection', (ws) => {
                                 session.recommendations = buildRecommendations(session.tastes, session.queue);
                                 broadcast(currentRoomId, {
                                     type: 'RECOMMENDATIONS_UPDATED',
-                                    enabled: true,
-                                    recommendations: session.recommendations,
+                                    payload: {
+                                        enabled: true,
+                                        recommendations: session.recommendations,
+                                    }
                                 });
                             }
                             // Relay taste to others for display
@@ -487,7 +510,7 @@ wss.on('connection', (ws) => {
                                 command: msg.command,
                                 payload: msg.payload,
                                 userId: currentUserId,
-                            }, ws);
+                            });
                         }
                     }
                     break;
@@ -526,12 +549,14 @@ wss.on('connection', (ws) => {
                 }, GRACE_PERIOD_MS);
                 session.disconnectTimers.set(currentUserId, timer);
                 
-                if (session.users.has(currentUserId)) {
+                                if (session.users.has(currentUserId)) {
                     session.users.get(currentUserId).online = false;
                 }
                 broadcast(currentRoomId, { 
                     type: 'PARTICIPANTS_UPDATED', 
-                    participants: getParticipantsList(session) 
+                    payload: {
+                        participants: getParticipantsList(session) 
+                    }
                 });
             } else {
                 console.log(`[Jam] Host ${currentUserId} left. Room ${currentRoomId} destroyed.`);
@@ -540,23 +565,27 @@ wss.on('connection', (ws) => {
             }
         } else {
             // Guest: mark offline, give them 30 s to reconnect
-            if (session.users.has(currentUserId)) {
+                        if (session.users.has(currentUserId)) {
                 session.users.get(currentUserId).online = false;
                 session.users.get(currentUserId).lastSeen = Date.now();
             }
             broadcast(currentRoomId, { 
                 type: 'PARTICIPANTS_UPDATED', 
-                participants: getParticipantsList(session) 
+                payload: {
+                    participants: getParticipantsList(session) 
+                }
             });
 
-            const timer = setTimeout(() => {
+                        const timer = setTimeout(() => {
                 const s = sessions.get(currentRoomId);
                 if (!s) return;
                 s.users.delete(currentUserId);
                 s.disconnectTimers.delete(currentUserId);
                 broadcast(currentRoomId, { 
                     type: 'PARTICIPANTS_UPDATED', 
-                    participants: getParticipantsList(s) 
+                    payload: {
+                        participants: getParticipantsList(s) 
+                    }
                 });
                 console.log(`[Jam] ${currentUserId} fully left room ${currentRoomId}`);
             }, GRACE_PERIOD_MS);

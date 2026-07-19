@@ -115,7 +115,7 @@ class SharedViewModel(
     private val playlistRepository: PlaylistRepository,
     private val lyricsCanvasRepository: LyricsCanvasRepository,
     private val cacheRepository: CacheRepository,
-    private val jamRepository: com.marki19.domain.jam.JamRepository,
+    private val jamRepository: com.marki19.domain.jam.JamRepository
 ) : BaseViewModel() {
     var isFirstLiked: Boolean = false
     var isFirstMiniplayer: Boolean = false
@@ -1662,7 +1662,15 @@ class SharedViewModel(
             val jamSession = jamRepository.sessionState.value
             if (jamSession != null) {
                 listTrack.forEach { track ->
-                    jamRepository.sendCommand(com.marki19.domain.jam.JamCommand.AddToQueue(track.videoId))
+                    jamRepository.sendCommand(
+                        com.marki19.domain.jam.JamCommand.AddToQueue(
+                            videoId = track.videoId,
+                            title = track.title,
+                            artist = track.artists?.joinToString(", ") { it.name } ?: "Unknown Artist",
+                            thumbnailUrl = track.thumbnails?.lastOrNull()?.url ?: "",
+                            durationMs = (track.durationSeconds ?: 0).toLong() * 1000L
+                        )
+                    )
                 }
             }
             if (listTrack.size == 1 && dataStoreManager.endlessQueue.first() == TRUE) {

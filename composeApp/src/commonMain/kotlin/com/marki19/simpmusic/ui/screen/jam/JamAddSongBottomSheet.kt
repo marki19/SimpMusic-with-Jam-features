@@ -83,7 +83,7 @@ fun JamAddSongBottomSheet(
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                        jamViewModel.addToQueue(item.videoId)
+                                        jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
                                         onDismissRequest()
                                         true
                                     } else false
@@ -110,11 +110,11 @@ fun JamAddSongBottomSheet(
                                     modifier = Modifier.fillMaxWidth(),
                                     isPlaying = false,
                                     onClickListener = {
-                                        jamViewModel.playNow(item.videoId)
+                                        jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
                                         onDismissRequest()
                                     },
                                     onAddToQueue = {
-                                        jamViewModel.addToQueue(item.videoId)
+                                        jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
                                         onDismissRequest()
                                     }
                                 )
@@ -133,45 +133,45 @@ fun JamAddSongBottomSheet(
                         modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
                     ) {
                         items(searchState.searchSongsResult) { song ->
-                            val dismissState = rememberSwipeToDismissBoxState(
+                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.StartToEnd) {
-                                        jamViewModel.addToQueue(song.videoId)
+                                        jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
                                         onDismissRequest()
                                         true
                                     } else false
                                 }
-                            )
-                            SwipeToDismissBox(
-                                state = dismissState,
-                                enableDismissFromEndToStart = false,
-                                backgroundContent = {
-                                    val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Color(0xFF87CEEB).copy(alpha = 0.5f) else Color.Transparent
-                                    Box(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .background(color)
-                                            .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.CenterStart
-                                    ) {
-                                        Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Queue", tint = Color.White)
-                                    }
-                                }
-                            ) {
-                                SongFullWidthItems(
-                                    track = song.toTrack(),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    isPlaying = false,
-                                    onClickListener = {
-                                        jamViewModel.playNow(song.videoId)
-                                        onDismissRequest()
-                                    },
-                                    onAddToQueue = {
-                                        jamViewModel.addToQueue(song.videoId)
-                                        onDismissRequest()
-                                    }
-                                )
-                            }
+                             )
+                             SwipeToDismissBox(
+                                 state = dismissState,
+                                 enableDismissFromEndToStart = false,
+                                 backgroundContent = {
+                                     val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Color(0xFF87CEEB).copy(alpha = 0.5f) else Color.Transparent
+                                     Box(
+                                         Modifier
+                                             .fillMaxSize()
+                                             .background(color)
+                                             .padding(horizontal = 20.dp),
+                                         contentAlignment = Alignment.CenterStart
+                                     ) {
+                                         Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Queue", tint = Color.White)
+                                     }
+                                 }
+                             ) {
+                                 SongFullWidthItems(
+                                     track = song.toTrack(),
+                                     modifier = Modifier.fillMaxWidth(),
+                                     isPlaying = false,
+                                     onClickListener = {
+                                          jamViewModel.playNow(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
+                                         onDismissRequest()
+                                     },
+                                     onAddToQueue = {
+                                          jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
+                                         onDismissRequest()
+                                     }
+                                 )
+                             }
                         }
                     }
                 }

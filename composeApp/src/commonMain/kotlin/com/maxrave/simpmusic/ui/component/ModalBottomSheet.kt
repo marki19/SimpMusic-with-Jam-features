@@ -912,10 +912,23 @@ fun QueueBottomSheet(
             skipPartiallyExpanded = true,
         )
     val lazyListState = rememberLazyListState()
+    val jamRepository = koinInject<com.marki19.domain.jam.JamRepository>()
+    val jamSession by jamRepository.sessionState.collectAsState(null)
+
     val dragDropState =
         rememberDragDropState(lazyListState) { from, to ->
             coroutineScope.launch {
-                musicServiceHandler.swap(from, to)
+                val session = jamSession
+                if (session != null) {
+                    if (session.isHost || session.permissions.allowReorder) {
+                        val item = session.playbackState.queue.getOrNull(from)
+                        if (item != null && !item.isRecommendation) {
+                            jamRepository.sendCommand(com.marki19.domain.jam.JamCommand.MoveQueueItem(item.queueId, to))
+                        }
+                    }
+                } else {
+                    musicServiceHandler.swap(from, to)
+                }
             }
         }
     var overscrollJob by remember { mutableStateOf<Job?>(null) }
@@ -926,7 +939,29 @@ fun QueueBottomSheet(
     val queueData by musicServiceHandler.queueData.collectAsStateWithLifecycle()
     val queue by remember {
         derivedStateOf {
-            queueData?.data?.listTracks ?: emptyList()
+            val session = jamSession
+            if (session != null) {
+                session.playbackState.queue.map { jamItem ->
+                    com.maxrave.domain.data.model.browse.album.Track(
+                        album = null,
+                        artists = listOf(com.maxrave.domain.data.model.searchResult.songs.Artist(name = jamItem.artist, id = null)),
+                        duration = null,
+                        durationSeconds = (jamItem.durationMs / 1000L).toInt(),
+                        isAvailable = true,
+                        isExplicit = false,
+                        likeStatus = null,
+                        thumbnails = listOf(com.maxrave.domain.data.model.searchResult.songs.Thumbnail(width = 544, url = jamItem.thumbnailUrl ?: "", height = 544)),
+                        title = jamItem.title,
+                        videoId = jamItem.videoId,
+                        videoType = null,
+                        category = null,
+                        feedbackTokens = null,
+                        resultType = null
+                    )
+                }
+            } else {
+                queueData?.data?.listTracks ?: emptyList()
+            }
         }
     }
     val loadMoreState by remember {
@@ -1175,7 +1210,16 @@ fun QueueBottomSheet(
                                             .fillMaxWidth(),
                                     onClickListener = { videoId ->
                                         if (videoId == track.videoId) {
-                                            musicServiceHandler.playMediaItemInMediaSource(index)
+                                            val session = jamSession
+                                            if (session != null) {
+                                                if (session.isHost || session.permissions.allowSkip) {
+                                                    coroutineScope.launch {
+                                                        jamRepository.sendCommand(com.marki19.domain.jam.JamCommand.SkipTo(index))
+                                                    }
+                                                }
+                                            } else {
+                                                musicServiceHandler.playMediaItemInMediaSource(index)
+                                            }
                                         }
                                     },
                                     onMoreClickListener = {

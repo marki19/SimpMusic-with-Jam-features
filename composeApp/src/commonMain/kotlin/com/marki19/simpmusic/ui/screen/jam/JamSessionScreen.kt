@@ -135,14 +135,15 @@ fun JamSessionScreen(
             ) {
 
                 // ── Room Code Card ────────────────────────────────────────────
-                item(key = "room_code") {
-                    RoomCodeCard(
-                        roomId = session.roomId,
-                        onCopy = {
-                            clipboardManager.setText(AnnotatedString("https://simpmusic.app/jam/${session.roomId}"))
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                item(key = "room_code") {
+                    Text(
+                        text = "Room Code: ${session.roomId}",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
 
@@ -449,12 +450,18 @@ fun JamSessionScreen(
                                             color = MaterialTheme.colorScheme.primary,
                                         )
                                         Surface(
-                                            shape = MaterialTheme.shapes.medium,
+                                            shape = RoundedCornerShape(
+                                                topStart = 16.dp,
+                                                topEnd = 16.dp,
+                                                bottomStart = if (isMe) 16.dp else 4.dp,
+                                                bottomEnd = if (isMe) 4.dp else 16.dp
+                                            ),
                                             color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                             modifier = Modifier.padding(top = 2.dp),
                                         ) {
                                             Text(
                                                 text = msg.text,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                                 color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
@@ -472,6 +479,7 @@ fun JamSessionScreen(
                                 modifier = Modifier.weight(1f),
                                 placeholder = { Text("Message…") },
                                 maxLines = 3,
+                                shape = RoundedCornerShape(24.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(
@@ -697,32 +705,20 @@ private fun NowPlayingRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FilterChip(
-                    selected = shuffle,
-                    onClick = onToggleShuffle,
-                    label = { Text("Shuffle") },
-                    leadingIcon = {
-                        Icon(Icons.Rounded.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
-                    },
-                )
-                FilterChip(
-                    selected = repeat != JamRepeatMode.OFF,
-                    onClick = onCycleRepeat,
-                    label = {
-                        Text(when (repeat) {
-                            JamRepeatMode.OFF -> "Repeat"
-                            JamRepeatMode.QUEUE -> "Repeat All"
-                            JamRepeatMode.ONE -> "Repeat One"
-                        })
-                    },
-                    leadingIcon = {
-                        Icon(
-                            if (repeat == JamRepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
-                )
+                IconButton(onClick = onToggleShuffle) {
+                    Icon(
+                        Icons.Rounded.Shuffle, 
+                        contentDescription = "Shuffle",
+                        tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onCycleRepeat) {
+                    Icon(
+                        if (repeat == JamRepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                        contentDescription = "Repeat",
+                        tint = if (repeat != JamRepeatMode.OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

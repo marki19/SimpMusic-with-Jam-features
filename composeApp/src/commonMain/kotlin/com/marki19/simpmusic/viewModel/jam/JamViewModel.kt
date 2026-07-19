@@ -146,14 +146,29 @@ class JamViewModel(
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.RemoveQueueItem(queueId)) }
     }
 
-    fun addToQueue(videoId: String) {
-        viewModelScope.launch { jamRepository.sendCommand(JamCommand.AddToQueue(videoId)) }
+    fun addToQueue(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
+        viewModelScope.launch {
+            jamRepository.sendCommand(JamCommand.AddToQueue(
+                videoId = videoId,
+                title = title,
+                artist = artist,
+                thumbnailUrl = thumbnailUrl,
+                durationMs = durationMs
+            ))
+        }
     }
 
-    fun playNow(videoId: String) {
-        viewModelScope.launch { jamRepository.sendCommand(JamCommand.PlayNow(videoId)) }
+    fun playNow(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
+        viewModelScope.launch {
+            jamRepository.sendCommand(JamCommand.PlayNow(
+                videoId = videoId,
+                title = title,
+                artist = artist,
+                thumbnailUrl = thumbnailUrl,
+                durationMs = durationMs
+            ))
+        }
     }
-
     fun moveQueueItem(queueId: String, toIndex: Int) {
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.MoveQueueItem(queueId, toIndex)) }
     }
