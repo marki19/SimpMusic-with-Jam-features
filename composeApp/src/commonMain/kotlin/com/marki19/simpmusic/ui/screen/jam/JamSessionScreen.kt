@@ -92,8 +92,20 @@ fun JamSessionScreen(
 
     // Full queue = manual + recommendations (already merged by repository)
     val fullQueue = session.playbackState.queue
-    val manualQueue = fullQueue.filter { !it.isRecommendation }
-    val recommendations = fullQueue.filter { it.isRecommendation }
+    
+    // Filter out songs that have already played (show only upcoming songs)
+    val currentSongId = session.playbackState.currentSongId
+    val currentIdx = fullQueue.indexOfFirst { it.videoId == currentSongId }
+    val upcomingQueue = if (currentIdx != -1 && currentIdx < fullQueue.size - 1) {
+        fullQueue.drop(currentIdx + 1)
+    } else if (currentIdx != -1) {
+        emptyList()
+    } else {
+        fullQueue
+    }
+
+    val manualQueue = upcomingQueue.filter { !it.isRecommendation }
+    val recommendations = upcomingQueue.filter { it.isRecommendation }
 
     // Group manual queue by contributor
     val groupedManual = manualQueue.groupBy { it.addedBy }
@@ -197,6 +209,16 @@ fun JamSessionScreen(
                                 }
                                 viewModel.setRepeat(next)
                             },
+                            onPrevious = {
+                                if (isHost || perms.allowSkip) {
+                                    viewModel.jamRepository.sendCommand(JamCommand.Skip(-1))
+                                }
+                            },
+                            onNext = {
+                                if (isHost || perms.allowSkip) {
+                                    viewModel.jamRepository.sendCommand(JamCommand.Skip(1))
+                                }
+                            }
                         )
                     } ?: run {
                         Text(
@@ -248,6 +270,7 @@ fun JamSessionScreen(
                             val canDrag = isHost || (perms.allowReorder && item.addedBy == viewModel.localUserId)
                             val canRemove = isHost || (perms.allowRemoveSongs && item.addedBy == viewModel.localUserId)
                             val hasVoted = item.voterIds.contains(viewModel.localUserId)
+                            val participant = session.participants.find { it.userId == item.addedBy }
 
                             ReorderableItem(reorderState, key = item.queueId, enabled = canDrag) { isDragging ->
                                 val dismissState = rememberSwipeToDismissBoxState(
@@ -290,6 +313,7 @@ fun JamSessionScreen(
                                         dragModifier = Modifier.draggableHandle(
                                             onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                                         ),
+                                        modifier = Modifier.animateItem(),
                                     )
                                 }
                             }
@@ -644,8 +668,11 @@ private fun NowPlayingRow(
     canControl: Boolean,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+    Column(modifier = modifier.padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = artworkUrl,

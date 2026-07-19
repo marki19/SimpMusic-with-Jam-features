@@ -105,12 +105,26 @@ class JamViewModel(
             if (topSongs.isEmpty()) {
                 topSongs = songRepository.getLikedSongs().firstOrNull() ?: emptyList()
             }
-            val videoIds = topSongs.take(20).map { it.videoId }
-            if (videoIds.isNotEmpty()) {
-                jamRepository.sendCommand(JamCommand.ShareTaste(videoIds))
+            
+            val tasteTracks = topSongs.take(20).map {
+                com.marki19.domain.jam.JamCommand.TasteTrack(
+                    videoId = it.videoId,
+                    title = it.title,
+                    artist = it.artistsName,
+                    thumbnailUrl = it.thumbnailUrl,
+                    durationMs = it.durationSeconds.toLong() * 1000L
+                )
+            }
+            
+            if (tasteTracks.isNotEmpty()) {
+                jamRepository.sendCommand(JamCommand.ShareTaste(tasteTracks))
             } else {
                 // Fallback to some default popular tracks if the user has a completely empty history
-                jamRepository.sendCommand(JamCommand.ShareTaste(listOf("dQw4w9WgXcQ", "kJQP7kiw5Fk", "fJ9rUzIMcZQ")))
+                jamRepository.sendCommand(JamCommand.ShareTaste(listOf(
+                    com.marki19.domain.jam.JamCommand.TasteTrack("dQw4w9WgXcQ", "Never Gonna Give You Up", "Rick Astley", null, 212000),
+                    com.marki19.domain.jam.JamCommand.TasteTrack("kJQP7kiw5Fk", "Despacito", "Luis Fonsi", null, 281000),
+                    com.marki19.domain.jam.JamCommand.TasteTrack("fJ9rUzIMcZQ", "Bohemian Rhapsody", "Queen", null, 359000)
+                )))
             }
         }
     }
