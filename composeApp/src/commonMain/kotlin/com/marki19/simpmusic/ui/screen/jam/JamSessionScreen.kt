@@ -211,12 +211,12 @@ fun JamSessionScreen(
                             },
                             onPrevious = {
                                 if (isHost || perms.allowSkip) {
-                                    viewModel.jamRepository.sendCommand(JamCommand.Skip(-1))
+                                    viewModel.skipPrevious()
                                 }
                             },
                             onNext = {
                                 if (isHost || perms.allowSkip) {
-                                    viewModel.jamRepository.sendCommand(JamCommand.Skip(1))
+                                    viewModel.skipNext()
                                 }
                             }
                         )

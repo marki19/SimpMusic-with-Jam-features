@@ -224,6 +224,14 @@ class JamViewModel(
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.SetRepeat(mode)) }
     }
 
+    fun skipNext() {
+        viewModelScope.launch { jamRepository.sendCommand(JamCommand.Skip(1)) }
+    }
+
+    fun skipPrevious() {
+        viewModelScope.launch { jamRepository.sendCommand(JamCommand.Skip(-1)) }
+    }
+
     // ── Chat ──────────────────────────────────────────────────────────────────
 
     fun sendChatMessage(text: String) {
