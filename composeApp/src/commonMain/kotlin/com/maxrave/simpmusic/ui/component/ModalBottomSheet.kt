@@ -146,7 +146,6 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
-import com.maxrave.simpmusic.ui.theme.white
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
@@ -215,7 +214,6 @@ import simpmusic.composeapp.generated.resources.edit_thumbnail
 import simpmusic.composeapp.generated.resources.edit_title
 import simpmusic.composeapp.generated.resources.endless_queue
 import simpmusic.composeapp.generated.resources.error_occurred
-import simpmusic.composeapp.generated.resources.holder
 import simpmusic.composeapp.generated.resources.itag
 import simpmusic.composeapp.generated.resources.key
 import simpmusic.composeapp.generated.resources.like
@@ -316,7 +314,7 @@ fun InfoPlayerBottomSheet(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
-                    color = Color(0xFF242424),
+                    color = rememberSurfaceDarkColors().container,
                     tonalElevation = AlertDialogDefaults.TonalElevation,
                     shadowElevation = 1.dp,
                 ) {
@@ -432,7 +430,7 @@ fun InfoPlayerBottomSheet(
         onDismissRequest = {
             onDismiss()
         },
-        containerColor = Color.Black,
+        containerColor = rememberSurfaceDarkColors().container,
         contentColor = Color.Transparent,
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
@@ -447,7 +445,7 @@ fun InfoPlayerBottomSheet(
                     .fillMaxWidth()
                     .fillMaxHeight(),
             shape = RectangleShape,
-            colors = CardDefaults.cardColors().copy(containerColor = Color.Black),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 modifier =
@@ -475,12 +473,12 @@ fun InfoPlayerBottomSheet(
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
                                 style = typo().bodyMedium,
-                                color = Color.White,
+                                color = rememberSurfaceDarkColors().content,
                             )
                             Text(
                                 text = screenDataState.nowPlayingTitle,
                                 style = typo().labelMedium,
-                                color = Color.White,
+                                color = rememberSurfaceDarkColors().content,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier =
@@ -504,7 +502,7 @@ fun InfoPlayerBottomSheet(
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_keyboard_arrow_down_24),
                                 contentDescription = "",
-                                tint = Color.White,
+                                tint = rememberSurfaceDarkColors().content,
                             )
                         }
                     },
@@ -524,7 +522,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.nowPlayingTitle,
@@ -550,7 +548,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.artistName,
@@ -575,7 +573,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = songEntity?.albumName ?: stringResource(Res.string.unknown),
@@ -600,7 +598,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.itag?.toString() ?: stringResource(Res.string.unknown),
@@ -625,7 +623,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.mimeType ?: stringResource(Res.string.unknown),
@@ -650,7 +648,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.codecs ?: stringResource(Res.string.unknown),
@@ -675,7 +673,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.bitrate?.toString() ?: stringResource(Res.string.unknown),
@@ -700,7 +698,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.bpm?.toString() ?: stringResource(Res.string.unknown),
@@ -725,7 +723,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.musicKey ?: stringResource(Res.string.unknown),
@@ -750,7 +748,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.keyScale ?: stringResource(Res.string.unknown),
@@ -776,7 +774,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.songInfoData?.viewCount?.toString() ?: stringResource(Res.string.unknown),
@@ -801,7 +799,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text =
@@ -830,7 +828,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.songInfoData?.description ?: stringResource(Res.string.no_description),
@@ -850,7 +848,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = white,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text =
@@ -989,7 +987,7 @@ fun QueueBottomSheet(
         onDismissRequest = {
             onDismiss()
         },
-        containerColor = Color.Black,
+        containerColor = rememberSurfaceDarkColors().container,
         contentColor = Color.Transparent,
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
@@ -1004,7 +1002,7 @@ fun QueueBottomSheet(
                     .fillMaxWidth()
                     .fillMaxHeight(),
             shape = RectangleShape,
-            colors = CardDefaults.cardColors().copy(containerColor = Color.Black),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 modifier =
@@ -1030,12 +1028,12 @@ fun QueueBottomSheet(
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
                                 style = typo().bodyMedium,
-                                color = Color.White,
+                                color = rememberSurfaceDarkColors().content,
                             )
                             Text(
                                 text = screenDataState.playlistName,
                                 style = typo().labelMedium,
-                                color = Color.White,
+                                color = rememberSurfaceDarkColors().content,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier =
@@ -1059,7 +1057,7 @@ fun QueueBottomSheet(
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_keyboard_arrow_down_24),
                                 contentDescription = "",
-                                tint = Color.White,
+                                tint = rememberSurfaceDarkColors().content,
                             )
                         }
                     },
@@ -1257,7 +1255,7 @@ fun QueueItemBottomSheet(
                     .fillMaxWidth()
                     .wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1270,7 +1268,7 @@ fun QueueItemBottomSheet(
                             .height(4.dp),
                     colors =
                         CardDefaults.cardColors().copy(
-                            containerColor = Color(0xFF474545),
+                            containerColor = rememberSurfaceDarkColors().handle,
                         ),
                     shape = RoundedCornerShape(50),
                 ) {}
@@ -1494,7 +1492,7 @@ fun NowPlayingBottomSheet(
 
     if (sleepTimerWarning) {
         AlertDialog(
-            containerColor = Color(0xFF242424),
+            containerColor = rememberSurfaceDarkColors().container,
             onDismissRequest = { sleepTimerWarning = false },
             confirmButton = {
                 TextButton(onClick = {
@@ -1537,7 +1535,7 @@ fun NowPlayingBottomSheet(
 
         AlertDialog(
             onDismissRequest = { mainLyricsProvider = false },
-            containerColor = Color(0xFF242424),
+            containerColor = rememberSurfaceDarkColors().container,
             title = {
                 Text(
                     text = stringResource(Res.string.main_lyrics_provider),
@@ -1640,7 +1638,7 @@ fun NowPlayingBottomSheet(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1654,7 +1652,7 @@ fun NowPlayingBottomSheet(
                                 .height(4.dp),
                         colors =
                             CardDefaults.cardColors().copy(
-                                containerColor = Color(0xFF474545),
+                                containerColor = rememberSurfaceDarkColors().handle,
                             ),
                         shape = RoundedCornerShape(50),
                     ) {}
@@ -1677,8 +1675,8 @@ fun NowPlayingBottomSheet(
                                     .diskCacheKey(thumb)
                                     .crossfade(550)
                                     .build(),
-                            placeholder = painterResource(Res.drawable.holder),
-                            error = painterResource(Res.drawable.holder),
+                            placeholder = rememberHolderPainter(),
+                            error = rememberHolderPainter(),
                             contentDescription = null,
                             contentScale = ContentScale.Inside,
                             modifier =
@@ -1925,10 +1923,12 @@ fun ActionButton(
     text: StringResource?,
     textString: String? = null,
     textColor: Color? = null,
-    iconColor: Color = Color.White,
+    iconColor: Color = Color.Unspecified,
     enable: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val c = rememberSurfaceDarkColors()
+    val resolvedIconColor = if (iconColor == Color.Unspecified) c.content else iconColor
     Box(
         modifier =
             Modifier
@@ -1951,15 +1951,15 @@ fun ActionButton(
                         .padding(12.dp),
                 colorFilter =
                     if (enable) {
-                        ColorFilter.tint(iconColor)
+                        ColorFilter.tint(resolvedIconColor)
                     } else {
-                        ColorFilter.tint(Color.Gray)
+                        ColorFilter.tint(c.disabled)
                     },
             )
             Text(
                 text = if (text != null) stringResource(text) else textString ?: "",
                 style = typo().labelSmall,
-                color = if (enable) textColor ?: Color.Unspecified else Color.Gray,
+                color = if (enable) textColor ?: c.content else c.disabled,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -2026,6 +2026,7 @@ fun CheckBoxActionButton(
 fun HeartCheckBox(
     size: Int = 24,
     checked: Boolean,
+    tint: Color = rememberSurfaceDarkColors().content,
     onStateChange: (() -> Unit)? = null,
 ) {
     Box(
@@ -2049,7 +2050,7 @@ fun HeartCheckBox(
                     painter = painterResource(Res.drawable.baseline_favorite_border_24),
                     contentDescription = "Favorite unchecked",
                     modifier = Modifier.fillMaxSize().padding(4.dp),
-                    colorFilter = ColorFilter.tint(Color.White),
+                    colorFilter = ColorFilter.tint(tint),
                 )
             }
         }
@@ -2078,7 +2079,7 @@ fun PlaybackSpeedPitchBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2086,7 +2087,7 @@ fun PlaybackSpeedPitchBottomSheet(
             ) {
                 Card(
                     modifier = Modifier.width(40.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2099,7 +2100,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         painter = painterResource(Res.drawable.round_speed_24),
                         contentDescription = stringResource(Res.string.playback_speed),
                         modifier = Modifier.size(24.dp),
-                        colorFilter = ColorFilter.tint(Color(0xFFB0B0A0)),
+                        colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().subtitle),
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
@@ -2114,13 +2115,13 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             Icons.Rounded.Remove,
                             contentDescription = "Decrease speed",
-                            tint = Color(0xFFB0B0A0),
+                            tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
                     Text(
                         text = "x${String.format("%.1f", playbackSpeed)}",
                         style = typo().titleMedium,
-                        color = Color(0xFFD0D0C0),
+                        color = rememberSurfaceDarkColors().subtitle,
                         modifier = Modifier.widthIn(min = 60.dp),
                         textAlign = TextAlign.Center,
                     )
@@ -2136,7 +2137,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             Icons.Rounded.Add,
                             contentDescription = "Increase speed",
-                            tint = Color(0xFFB0B0A0),
+                            tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
                 }
@@ -2151,7 +2152,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icons.Rounded.Tune,
                             contentDescription = stringResource(Res.string.pitch),
                             modifier = Modifier.size(24.dp),
-                            tint = Color(0xFFB0B0A0),
+                            tint = rememberSurfaceDarkColors().subtitle,
                         )
                         Spacer(modifier = Modifier.weight(1f))
                         IconButton(
@@ -2163,13 +2164,13 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 Icons.Rounded.Remove,
                                 contentDescription = "Decrease pitch",
-                                tint = Color(0xFFB0B0A0),
+                                tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
                         Text(
                             text = "$pitch",
                             style = typo().titleMedium,
-                            color = Color(0xFFD0D0C0),
+                            color = rememberSurfaceDarkColors().subtitle,
                             modifier = Modifier.widthIn(min = 60.dp),
                             textAlign = TextAlign.Center,
                         )
@@ -2182,7 +2183,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 Icons.Rounded.Add,
                                 contentDescription = "Increase pitch",
-                                tint = Color(0xFFB0B0A0),
+                                tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
                     }
@@ -2249,7 +2250,7 @@ fun SleepTimerBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF1C1C1C)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2260,7 +2261,7 @@ fun SleepTimerBottomSheet(
                 // Drag handle
                 Card(
                     modifier = Modifier.width(40.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF555555)),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().disabled),
                     shape = RoundedCornerShape(50),
                 ) {}
 
@@ -2281,7 +2282,7 @@ fun SleepTimerBottomSheet(
                     Text(
                         text = stringResource(Res.string.sleep_timer_off),
                         style = typo().titleMedium,
-                        color = Color.White,
+                        color = rememberSurfaceDarkColors().content,
                     )
                 }
 
@@ -2311,14 +2312,14 @@ fun SleepTimerBottomSheet(
                                 border =
                                     BorderStroke(
                                         width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) seed else Color(0xFF3D3D3D),
+                                        color = if (isSelected) seed else rememberSurfaceDarkColors().disabled,
                                     ),
                                 contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                             ) {
                                 Text(
                                     text = preset.label,
                                     style = typo().bodySmall,
-                                    color = if (isSelected) seed else Color(0xFFCCCCCC),
+                                    color = if (isSelected) seed else rememberSurfaceDarkColors().subtitle,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 )
                             }
@@ -2349,14 +2350,14 @@ fun SleepTimerBottomSheet(
                         border =
                             BorderStroke(
                                 width = if (isEndSelected) 1.5.dp else 1.dp,
-                                color = if (isEndSelected) seed else Color(0xFF3D3D3D),
+                                color = if (isEndSelected) seed else rememberSurfaceDarkColors().disabled,
                             ),
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
                             text = "End of song",
                             style = typo().bodySmall,
-                            color = if (isEndSelected) seed else Color(0xFFCCCCCC),
+                            color = if (isEndSelected) seed else rememberSurfaceDarkColors().subtitle,
                             fontWeight = if (isEndSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
@@ -2377,14 +2378,14 @@ fun SleepTimerBottomSheet(
                         border =
                             BorderStroke(
                                 width = if (isCustomSelected) 1.5.dp else 1.dp,
-                                color = if (isCustomSelected) seed else Color(0xFF3D3D3D),
+                                color = if (isCustomSelected) seed else rememberSurfaceDarkColors().disabled,
                             ),
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
                             text = "Custom",
                             style = typo().bodySmall,
-                            color = if (isCustomSelected) seed else Color(0xFFCCCCCC),
+                            color = if (isCustomSelected) seed else rememberSurfaceDarkColors().subtitle,
                             fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
@@ -2411,7 +2412,7 @@ fun SleepTimerBottomSheet(
                                 Text(
                                     text = "min",
                                     style = typo().bodySmall,
-                                    color = Color.Gray,
+                                    color = rememberSurfaceDarkColors().disabled,
                                 )
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2477,7 +2478,7 @@ fun SleepTimerBottomSheet(
                     Text(
                         text = stringResource(Res.string.set),
                         style = typo().labelSmall,
-                        color = Color.White,
+                        color = rememberSurfaceDarkColors().content,
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
@@ -2527,7 +2528,7 @@ fun AddToPlaylistModalBottomSheet(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = BottomSheetDefaults.ExpandedShape,
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -2536,7 +2537,7 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2575,7 +2576,7 @@ fun AddToPlaylistModalBottomSheet(
                             text = stringResource(Res.string.no_playlist_found),
                             style = typo().labelSmall,
                             modifier = Modifier.padding(20.dp),
-                            color = Color.Gray,
+                            color = rememberSurfaceDarkColors().disabled,
                         )
                     } else {
                         Crossfade(isYouTubePlaylistClicked) { clicked ->
@@ -2604,7 +2605,7 @@ fun AddToPlaylistModalBottomSheet(
                                                 Text(
                                                     text = playlist.title,
                                                     style = typo().labelSmall,
-                                                    color = Color.White,
+                                                    color = rememberSurfaceDarkColors().content,
                                                 )
                                             }
                                         }
@@ -2644,7 +2645,7 @@ fun AddToPlaylistModalBottomSheet(
                                                 Text(
                                                     text = playlist.title,
                                                     style = typo().labelSmall,
-                                                    color = if (playlist.tracks?.contains(videoId) == true) Color.Gray else Color.White,
+                                                    color = if (playlist.tracks?.contains(videoId) == true) rememberSurfaceDarkColors().disabled else rememberSurfaceDarkColors().content,
                                                 )
                                             }
                                         }
@@ -2692,13 +2693,13 @@ fun ArtistModalBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2785,13 +2786,13 @@ fun PlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2841,13 +2842,13 @@ fun PlaylistBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(5.dp))
@@ -2959,13 +2960,13 @@ fun LocalPlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -3009,13 +3010,13 @@ fun LocalPlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -3114,13 +3115,13 @@ fun SortPlaylistBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Text(
@@ -3148,7 +3149,7 @@ fun SortPlaylistBottomSheet(
                                 text = stringResource(filterOption.displayNameRes()),
                                 style = typo().labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = if (isSelected) seed else Color.White,
+                                color = if (isSelected) seed else rememberSurfaceDarkColors().content,
                             )
                             Spacer(modifier = Modifier.weight(1f))
                             if (isSelected) {
@@ -3195,13 +3196,13 @@ fun DevLogInBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
@@ -3259,13 +3260,13 @@ fun DevCookieLogInBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
