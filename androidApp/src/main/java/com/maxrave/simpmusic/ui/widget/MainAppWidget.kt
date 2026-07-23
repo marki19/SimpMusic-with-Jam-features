@@ -188,31 +188,28 @@ class MainAppWidget :
                     GlanceModifier
                         .fillMaxSize()
                         .background(ColorProvider(bgColor))
+                        .cornerRadius(24.dp)
+                        .padding(12.dp)
                         .clickable(actionStartActivity<MainActivity>()),
                     contentAlignment = Alignment.Center,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            GlanceModifier
-                                .fillMaxWidth(),
+                        modifier = GlanceModifier.fillMaxSize(),
                     ) {
-                        Spacer(
-                            modifier =
-                                GlanceModifier
-                                    .width(16.dp)
-                                    .height(1.dp),
-                        )
-                        Box(contentAlignment = Alignment.Center, modifier = GlanceModifier.size(96.dp)) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = GlanceModifier.size(80.dp),
+                        ) {
                             randomImage?.let {
                                 Image(
                                     provider = ImageProvider(it),
-                                    contentDescription = "",
-                                    contentScale = ContentScale.FillBounds,
+                                    contentDescription = "Artwork",
+                                    contentScale = ContentScale.Crop,
                                     modifier =
                                         GlanceModifier
                                             .fillMaxSize()
-                                            .cornerRadius(12.dp),
+                                            .cornerRadius(16.dp),
                                 )
                             } ?: CircularProgressIndicator(
                                 GlanceModifier.size(24.dp),
@@ -220,56 +217,44 @@ class MainAppWidget :
                             )
                         }
                         Column(
-                            GlanceModifier.fillMaxWidth().defaultWeight().padding(
-                                start = 16.dp,
-                                end = 8.dp,
-                            ),
+                            GlanceModifier
+                                .fillMaxWidth()
+                                .defaultWeight()
+                                .padding(start = 12.dp, end = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = title,
+                                text = title.ifBlank { "SimpMusic" },
                                 style =
                                     TextStyle(
                                         color = ColorProvider(Color.White),
-                                        fontSize = 16.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Start,
                                     ),
                                 maxLines = 1,
-                                modifier =
-                                    GlanceModifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight(),
+                                modifier = GlanceModifier.fillMaxWidth(),
                             )
                             Text(
-                                text = artist,
+                                text = artist.ifBlank { "Not Playing" },
                                 style =
                                     TextStyle(
                                         color = ColorProvider(Color.LightGray),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Normal,
                                         textAlign = TextAlign.Start,
                                     ),
                                 maxLines = 1,
-                                modifier =
-                                    GlanceModifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight(),
+                                modifier = GlanceModifier.fillMaxWidth(),
                             )
-                            Spacer(GlanceModifier.size(8.dp))
+                            Spacer(GlanceModifier.size(6.dp))
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier =
-                                    GlanceModifier
-                                        .wrapContentSize()
-                                        .fillMaxWidth(),
+                                horizontalAlignment = Alignment.Start,
+                                modifier = GlanceModifier.fillMaxWidth(),
                             ) {
                                 CircleIconButton(
-                                    modifier =
-                                        GlanceModifier
-                                            .background(Color.Transparent)
-                                            .size(32.dp),
+                                    modifier = GlanceModifier.size(30.dp),
                                     imageProvider = ImageProvider(R.drawable.baseline_shuffle_24),
                                     contentDescription = "Shuffle",
                                     contentColor = if (controllerState.isShuffle) ColorProvider(seed) else ColorProvider(Color.White),
@@ -278,11 +263,9 @@ class MainAppWidget :
                                         sharedViewModel.onUIEvent(UIEvent.Shuffle)
                                     },
                                 )
-                                Spacer(GlanceModifier.size(8.dp))
+                                Spacer(GlanceModifier.size(6.dp))
                                 CircleIconButton(
-                                    modifier =
-                                        GlanceModifier
-                                            .size(32.dp),
+                                    modifier = GlanceModifier.size(30.dp),
                                     imageProvider = ImageProvider(R.drawable.baseline_skip_previous_24),
                                     contentDescription = "Previous",
                                     contentColor = ColorProvider(if (controllerState.isPreviousAvailable) Color.White else Color.Gray),
@@ -292,11 +275,9 @@ class MainAppWidget :
                                         sharedViewModel.onUIEvent(UIEvent.Previous)
                                     },
                                 )
-                                Spacer(GlanceModifier.size(8.dp))
+                                Spacer(GlanceModifier.size(6.dp))
                                 CircleIconButton(
-                                    modifier =
-                                        GlanceModifier
-                                            .size(48.dp),
+                                    modifier = GlanceModifier.size(42.dp),
                                     imageProvider =
                                         if (controllerState.isPlaying) {
                                             ImageProvider(R.drawable.baseline_pause_circle_24)
@@ -310,11 +291,9 @@ class MainAppWidget :
                                         sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                     },
                                 )
-                                Spacer(GlanceModifier.size(8.dp))
+                                Spacer(GlanceModifier.size(6.dp))
                                 CircleIconButton(
-                                    modifier =
-                                        GlanceModifier
-                                            .size(32.dp),
+                                    modifier = GlanceModifier.size(30.dp),
                                     imageProvider = ImageProvider(R.drawable.baseline_skip_next_24),
                                     contentDescription = "Next",
                                     contentColor = ColorProvider(if (controllerState.isNextAvailable) Color.White else Color.Gray),
@@ -324,18 +303,16 @@ class MainAppWidget :
                                         sharedViewModel.onUIEvent(UIEvent.Next)
                                     },
                                 )
-                                Spacer(GlanceModifier.size(8.dp))
+                                Spacer(GlanceModifier.size(6.dp))
                                 CircleIconButton(
-                                    modifier =
-                                        GlanceModifier
-                                            .size(32.dp),
+                                    modifier = GlanceModifier.size(30.dp),
                                     imageProvider =
                                         when (controllerState.repeatState) {
                                             RepeatState.None -> ImageProvider(R.drawable.baseline_repeat_24)
                                             RepeatState.All -> ImageProvider(R.drawable.baseline_repeat_24_enable)
                                             RepeatState.One -> ImageProvider(R.drawable.baseline_repeat_one_24)
                                         },
-                                    contentDescription = "REPEAT",
+                                    contentDescription = "Repeat",
                                     contentColor =
                                         if (controllerState.repeatState is RepeatState.None) {
                                             ColorProvider(Color.White)
@@ -348,21 +325,6 @@ class MainAppWidget :
                                     },
                                 )
                             }
-                        }
-                        Box(
-                            modifier =
-                                GlanceModifier
-                                    .padding(vertical = 16.dp)
-                                    .padding(end = 16.dp),
-                        ) {
-                            Image(
-                                provider = ImageProvider(R.drawable.mono),
-                                contentDescription = "Logo",
-                                modifier =
-                                    GlanceModifier
-                                        .size(40.dp),
-                                contentScale = ContentScale.FillBounds,
-                            )
                         }
                     }
                 }

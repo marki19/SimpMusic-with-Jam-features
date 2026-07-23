@@ -64,7 +64,7 @@ fun JamMenuScreen(
             
             Button(
                 onClick = {
-                    navController.navigate(JamHostDestination) {
+                    navController.navigate(JamHostDestination()) {
                         launchSingleTop = true
                     }
                 },

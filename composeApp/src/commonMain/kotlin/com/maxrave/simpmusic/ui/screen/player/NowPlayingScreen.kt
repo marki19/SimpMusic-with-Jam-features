@@ -69,9 +69,9 @@ import androidx.compose.material.icons.filled.SubtitlesOff
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Forward5
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Replay5
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.ThumbsUpDown
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -1226,11 +1226,11 @@ fun NowPlayingScreenContent(
                                                                             .aspectRatio(1f)
                                                                             .clip(CircleShape),
                                                                     onClick = {
-                                                                        sharedViewModel.onUIEvent(UIEvent.Backward)
+                                                                        sharedViewModel.onUIEvent(UIEvent.SkipToPrevious)
                                                                     },
                                                                 ) {
                                                                     Icon(
-                                                                        imageVector = Icons.Rounded.Replay5,
+                                                                        imageVector = Icons.Rounded.SkipPrevious,
                                                                         tint = Color.White,
                                                                         contentDescription = "",
                                                                         modifier =
@@ -1250,11 +1250,11 @@ fun NowPlayingScreenContent(
                                                                             .aspectRatio(1f)
                                                                             .clip(CircleShape),
                                                                     onClick = {
-                                                                        sharedViewModel.onUIEvent(UIEvent.Forward)
+                                                                        sharedViewModel.onUIEvent(UIEvent.Next)
                                                                     },
                                                                 ) {
                                                                     Icon(
-                                                                        imageVector = Icons.Rounded.Forward5,
+                                                                        imageVector = Icons.Rounded.SkipNext,
                                                                         tint = Color.White,
                                                                         contentDescription = "",
                                                                         modifier =

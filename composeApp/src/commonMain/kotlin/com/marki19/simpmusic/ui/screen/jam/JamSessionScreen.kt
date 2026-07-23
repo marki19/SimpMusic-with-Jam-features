@@ -67,6 +67,7 @@ fun JamSessionScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showChatSheet by remember { mutableStateOf(false) }
     var showAddSongSheet by remember { mutableStateOf(false) }
+    var showEndSessionDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -94,14 +95,14 @@ fun JamSessionScreen(
     val fullQueue = session.playbackState.queue
     
     // Filter out songs that have already played (show only upcoming songs)
-    val currentSongId = session.playbackState.currentSongId
-    val currentIdx = fullQueue.indexOfFirst { it.videoId == currentSongId }
-    val upcomingQueue = if (currentIdx != -1 && currentIdx < fullQueue.size - 1) {
-        fullQueue.drop(currentIdx + 1)
-    } else if (currentIdx != -1) {
-        emptyList()
-    } else {
-        fullQueue
+    val nowPlayingId = session.playbackState.currentSongId?.substringAfterLast('/')
+        ?: mediaPlayerHandler.nowPlayingState.value?.track?.videoId?.substringAfterLast('/')
+
+    val currentIdx = fullQueue.indexOfFirst { it.videoId.substringAfterLast('/') == nowPlayingId }
+    val upcomingQueue = when {
+        currentIdx >= 0 -> fullQueue.drop(currentIdx + 1)
+        nowPlayingId != null -> fullQueue.filter { it.videoId.substringAfterLast('/') != nowPlayingId }
+        else -> fullQueue
     }
 
     val manualQueue = upcomingQueue.filter { !it.isRecommendation }
@@ -132,7 +133,8 @@ fun JamSessionScreen(
                 onBack = onBack,
                 onChat = { showChatSheet = true },
                 onSettings = { showSettingsSheet = true },
-                onLeave = { viewModel.leaveSession(); onBack() },
+                onLeave = { showEndSessionDialog = true },
+                onEndSession = { showEndSessionDialog = true },
             )
         },
     ) { padding ->
@@ -363,16 +365,47 @@ fun JamSessionScreen(
 
                     items(recommendations, key = { it.queueId }) { item ->
                         val hasVoted = item.voterIds.contains(viewModel.localUserId)
-                        JamQueueItem(
-                            item = item,
-                            isDragging = false,
-                            canDrag = false,
-                            votingAllowed = isHost || perms.allowVoting,
-                            hasVoted = hasVoted,
-                            onVote = { viewModel.voteForSong(item.queueId) },
-                            dragModifier = Modifier,
-                            modifier = Modifier.animateItem(),
+                        
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                    viewModel.addToQueue(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
+                                    sharedViewModel.makeToast("Added to queue: ${item.title}")
+                                    false
+                                } else false
+                            }
                         )
+                        
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromEndToStart = false,
+                            backgroundContent = {
+                                val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Color(0xFF87CEEB).copy(alpha = 0.5f) else Color.Transparent
+                                Box(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .background(color)
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Queue", tint = Color.White)
+                                }
+                            }
+                        ) {
+                            JamQueueItem(
+                                item = item,
+                                isDragging = false,
+                                canDrag = false,
+                                votingAllowed = isHost || perms.allowVoting,
+                                hasVoted = hasVoted,
+                                onVote = { viewModel.voteForSong(item.queueId) },
+                                dragModifier = Modifier,
+                                modifier = Modifier.animateItem().clickable {
+                                    viewModel.playNow(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
+                                    sharedViewModel.makeToast("Now playing: ${item.title}")
+                                },
+                            )
+                        }
                     }
                 }
 
@@ -516,6 +549,46 @@ fun JamSessionScreen(
         }
     }
 
+    // ── End Session Confirmation Dialog ────────────────────────────────────────
+    if (showEndSessionDialog) {
+        AlertDialog(
+            onDismissRequest = { showEndSessionDialog = false },
+            title = { Text(if (session.isHost) "End Jam Session?" else "Leave Jam Session?") },
+            text = {
+                Text(
+                    if (session.isHost)
+                        "Are you sure you want to end this Jam session? This will close the room for all participants."
+                    else
+                        "Are you sure you want to leave this Jam session?"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showEndSessionDialog = false
+                        viewModel.leaveSession()
+                        onBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        if (session.isHost) "End Session" else "Leave",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndSessionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // ── Add Song sheet ─────────────────────────────────────────────────────────
     if (showAddSongSheet) {
         JamAddSongBottomSheet(
@@ -538,6 +611,7 @@ private fun JamTopBar(
     onChat: () -> Unit,
     onSettings: () -> Unit,
     onLeave: () -> Unit,
+    onEndSession: () -> Unit,
 ) {
     TopAppBar(
         title = {
@@ -562,10 +636,16 @@ private fun JamTopBar(
                                 )
                             }
                         }
+                        val listenersCount = session.participants.count { it.userId != session.hostId }
+                        val listenerLabel = if (session.isHost) {
+                            if (listenersCount == 0) "Only you" else "$listenersCount listener${if (listenersCount > 1) "s" else ""}"
+                        } else {
+                            if (listenersCount == 0) "Host" else "$listenersCount other listener${if (listenersCount > 1) "s" else ""}"
+                        }
                         if (session.participants.isNotEmpty()) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "${session.participants.size} listening",
+                                listenerLabel,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -586,6 +666,9 @@ private fun JamTopBar(
             if (session.isHost) {
                 IconButton(onClick = onSettings) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = "Settings")
+                }
+                TextButton(onClick = onEndSession) {
+                    Text("End Jam", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             } else {
                 TextButton(onClick = onLeave) {
@@ -718,6 +801,20 @@ private fun NowPlayingRow(
                         Icons.Rounded.Shuffle, 
                         contentDescription = "Shuffle",
                         tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onPrevious) {
+                    Icon(
+                        Icons.Rounded.SkipPrevious,
+                        contentDescription = "Previous",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onNext) {
+                    Icon(
+                        Icons.Rounded.SkipNext,
+                        contentDescription = "Next",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onCycleRepeat) {
@@ -869,15 +966,6 @@ private fun JamQueueItem(
                 )
             }
 
-            // Vote badge
-            if (votingAllowed) {
-                Spacer(modifier = Modifier.width(8.dp))
-                VoteBadge(
-                    voteCount = item.voteCount,
-                    hasVoted = hasVoted,
-                    onVote = onVote,
-                )
-            }
         }
     }
 }

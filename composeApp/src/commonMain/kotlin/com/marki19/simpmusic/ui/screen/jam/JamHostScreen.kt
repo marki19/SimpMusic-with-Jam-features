@@ -16,6 +16,11 @@ import kotlinx.coroutines.delay
 @Composable
 fun JamHostScreen(
     viewModel: JamViewModel,
+    initialVideoId: String? = null,
+    initialTitle: String? = null,
+    initialArtist: String? = null,
+    initialThumbnailUrl: String? = null,
+    initialDurationMs: Long? = null,
     onNavigateToSession: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -89,17 +94,20 @@ fun JamHostScreen(
             Spacer(modifier = Modifier.height(32.dp))
             
             Button(
-                onClick = { viewModel.createSession() },
+                onClick = { 
+                    viewModel.createSession(
+                        initialVideoId = initialVideoId,
+                        initialTitle = initialTitle,
+                        initialArtist = initialArtist,
+                        initialThumbnailUrl = initialThumbnailUrl,
+                        initialDurationMs = initialDurationMs
+                    ) 
+                },
                 enabled = !isConnecting,
                 modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF87CEEB), // Light Blue
-                    contentColor = Color.Black,
-                    disabledContainerColor = Color(0xFF87CEEB).copy(alpha = 0.5f),
-                    disabledContentColor = Color.Black.copy(alpha = 0.5f)
-                )
+                colors = ButtonDefaults.buttonColors(contentColor = Color.Black)
             ) {
-                Text("Create Room")
+                Text("Create Room", color = Color.Black)
             }
             
             Spacer(modifier = Modifier.height(16.dp))

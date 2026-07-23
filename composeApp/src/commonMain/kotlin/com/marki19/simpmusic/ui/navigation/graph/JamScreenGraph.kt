@@ -26,10 +26,16 @@ fun NavGraphBuilder.jamScreenGraph(
         )
     }
     
-    composable<JamHostDestination> {
+    composable<JamHostDestination> { backStackEntry ->
+        val dest = backStackEntry.toRoute<JamHostDestination>()
         val jamViewModel: JamViewModel = koinInject()
         JamHostScreen(
             viewModel = jamViewModel,
+            initialVideoId = dest.initialVideoId,
+            initialTitle = dest.initialTitle,
+            initialArtist = dest.initialArtist,
+            initialThumbnailUrl = dest.initialThumbnailUrl,
+            initialDurationMs = dest.initialDurationMs,
             onNavigateToSession = { 
                 navController.navigate(JamSessionDestination(roomCode = jamViewModel.sessionState.value?.roomId ?: "")) {
                     popUpTo(JamHostDestination::class) { inclusive = true }

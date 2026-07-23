@@ -941,7 +941,15 @@ fun QueueBottomSheet(
         derivedStateOf {
             val session = jamSession
             if (session != null) {
-                session.playbackState.queue.map { jamItem ->
+                val currentSongId = session.playbackState.currentSongId?.substringAfterLast('/')
+                val fullQueue = session.playbackState.queue
+                val currentIdx = fullQueue.indexOfFirst { it.videoId.substringAfterLast('/') == currentSongId }
+                val upcomingJamQueue = when {
+                    currentIdx >= 0 -> fullQueue.drop(currentIdx + 1)
+                    currentSongId != null -> fullQueue.filter { it.videoId.substringAfterLast('/') != currentSongId }
+                    else -> fullQueue
+                }
+                upcomingJamQueue.map { jamItem ->
                     com.maxrave.domain.data.model.browse.album.Track(
                         album = null,
                         artists = listOf(com.maxrave.domain.data.model.searchResult.songs.Artist(name = jamItem.artist, id = null)),
@@ -1847,15 +1855,14 @@ fun NowPlayingBottomSheet(
                             text = null,
                             textString = "Start a Jam"
                         ) {
-                            viewModel.onUIEvent(
-                                NowPlayingBottomSheetUIEvent.StartRadio(
-                                    videoId = uiState.songUIState.videoId,
-                                    name = "\"${uiState.songUIState.title}\" Jam",
-                                    limit = 5
-                                )
-                            )
                             onNavigateToOtherScreen()
-                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination)
+                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                initialVideoId = uiState.songUIState.videoId,
+                                initialTitle = uiState.songUIState.title,
+                                initialArtist = uiState.songUIState.listArtists.firstOrNull()?.name,
+                                initialThumbnailUrl = uiState.songUIState.thumbnails,
+                                initialDurationMs = 0L
+                            ))
                             hideModalBottomSheet()
                         }
                     }

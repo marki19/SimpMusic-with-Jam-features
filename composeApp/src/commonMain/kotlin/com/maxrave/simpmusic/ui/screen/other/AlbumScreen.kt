@@ -964,8 +964,14 @@ fun AlbumScreen(
                         isYourYouTubePlaylist = false,
                         onSaveToLocal = {},
                         onStartJam = {
-                            uiState.listTrack.firstOrNull()?.let { viewModel.playTrack(it) }
-                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination) {
+                            val track = uiState.listTrack.firstOrNull()
+                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                initialVideoId = track?.videoId,
+                                initialTitle = track?.title,
+                                initialArtist = track?.artists?.firstOrNull()?.name,
+                                initialThumbnailUrl = track?.thumbnails?.lastOrNull()?.url,
+                                initialDurationMs = (track?.durationSeconds?.toLong() ?: 0L) * 1000L
+                            )) {
                                 launchSingleTop = true
                             }
                         },

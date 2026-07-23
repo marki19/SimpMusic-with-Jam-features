@@ -8,6 +8,7 @@ import com.marki19.domain.jam.JamRepository
 import com.marki19.domain.jam.JamRepeatMode
 import com.marki19.domain.jam.JamSessionState
 import com.maxrave.domain.repository.AccountRepository
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,15 +16,19 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
+import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 class JamViewModel(
     private val jamRepository: JamRepository,
     private val songRepository: SongRepository,
     private val accountRepository: AccountRepository,
+    private val dataStoreManager: DataStoreManager,
+    private val mediaPlayerHandler: MediaPlayerHandler,
 ) : ViewModel() {
 
     val sessionState: StateFlow<JamSessionState?> = jamRepository.sessionState
@@ -96,17 +101,18 @@ class JamViewModel(
 
     // ── Taste sharing ─────────────────────────────────────────────────────────
 
-    private fun syncTaste() {
+    private fun syncTaste(shuffle: Boolean = false) {
         viewModelScope.launch {
             var topSongs = songRepository.getMostPlayedSongs().firstOrNull() ?: emptyList()
             if (topSongs.isEmpty()) {
-                topSongs = songRepository.getRecentSong(20, 0)
+                topSongs = songRepository.getRecentSong(100, 0)
             }
             if (topSongs.isEmpty()) {
                 topSongs = songRepository.getLikedSongs().firstOrNull() ?: emptyList()
             }
             
-            val tasteTracks = topSongs.take(20).map {
+            val listToTake = if (shuffle) topSongs.shuffled() else topSongs
+            val tasteTracks = listToTake.take(20).map {
                 com.marki19.domain.jam.JamCommand.TasteTrack(
                     videoId = it.videoId,
                     title = it.title,
@@ -131,15 +137,54 @@ class JamViewModel(
 
     // ── Session lifecycle ─────────────────────────────────────────────────────
 
-    fun createSession() {
+    fun createSession(
+        initialVideoId: String? = null,
+        initialTitle: String? = null,
+        initialArtist: String? = null,
+        initialThumbnailUrl: String? = null,
+        initialDurationMs: Long? = null
+    ) {
         viewModelScope.launch {
             _isConnecting.value = true
             val account = accountRepository.getUsedGoogleAccount().firstOrNull()
+            val dsName = dataStoreManager.getString("AccountName").firstOrNull()
+            val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
+
             val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
-            val name = account?.name?.takeIf { it.isNotBlank() } ?: "Host"
-            val imageUrl = account?.thumbnailUrl ?: ""
+            val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Host"
+            var rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
+            
+            if (rawImageUrl.isBlank() && account?.netscapeCookie != null) {
+                val accountInfoList = accountRepository.getAccountInfo(account.netscapeCookie!!).firstOrNull()
+                rawImageUrl = accountInfoList?.firstOrNull()?.thumbnails?.lastOrNull()?.url ?: ""
+                if (rawImageUrl.isNotBlank()) {
+                    dataStoreManager.putString("AccountThumbUrl", rawImageUrl)
+                }
+            }
+            
+            val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
+            
             localUserId = userId
             jamRepository.createSession(userId, name, imageUrl)
+            syncTaste()
+            
+            val activeTrack = mediaPlayerHandler.nowPlayingState.value.track
+            val effectiveVideoId = initialVideoId ?: activeTrack?.videoId
+            val effectiveTitle = initialTitle ?: activeTrack?.title
+            val effectiveArtist = initialArtist ?: activeTrack?.artists?.firstOrNull()?.name
+            val effectiveThumbnailUrl = initialThumbnailUrl ?: activeTrack?.thumbnails?.lastOrNull()?.url
+            val effectiveDurationMs = initialDurationMs ?: ((activeTrack?.durationSeconds ?: 0) * 1000L)
+            
+            if (effectiveVideoId != null) {
+                jamRepository.sessionState.first { it != null }
+                jamRepository.sendCommand(JamCommand.PlayNow(
+                    videoId = effectiveVideoId,
+                    title = effectiveTitle ?: "",
+                    artist = effectiveArtist ?: "",
+                    thumbnailUrl = effectiveThumbnailUrl,
+                    durationMs = effectiveDurationMs
+                ))
+            }
         }
     }
 
@@ -147,11 +192,26 @@ class JamViewModel(
         viewModelScope.launch {
             _isConnecting.value = true
             val account = accountRepository.getUsedGoogleAccount().firstOrNull()
+            val dsName = dataStoreManager.getString("AccountName").firstOrNull()
+            val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
+
             val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
-            val name = account?.name?.takeIf { it.isNotBlank() } ?: "Guest"
-            val imageUrl = account?.thumbnailUrl ?: ""
+            val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Guest"
+            var rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
+            
+            if (rawImageUrl.isBlank() && account?.netscapeCookie != null) {
+                val accountInfoList = accountRepository.getAccountInfo(account.netscapeCookie!!).firstOrNull()
+                rawImageUrl = accountInfoList?.firstOrNull()?.thumbnails?.lastOrNull()?.url ?: ""
+                if (rawImageUrl.isNotBlank()) {
+                    dataStoreManager.putString("AccountThumbUrl", rawImageUrl)
+                }
+            }
+            
+            val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
+
             localUserId = userId
             jamRepository.joinSession(roomId, userId, name, imageUrl)
+            syncTaste()
         }
     }
 
@@ -211,7 +271,10 @@ class JamViewModel(
     }
 
     fun refreshRecommendations() {
-        viewModelScope.launch { jamRepository.sendCommand(JamCommand.RefreshRecommendations) }
+        viewModelScope.launch {
+            syncTaste(shuffle = true)
+            jamRepository.sendCommand(JamCommand.RefreshRecommendations)
+        }
     }
 
     // ── Playback controls ─────────────────────────────────────────────────────

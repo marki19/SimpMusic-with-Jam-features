@@ -155,7 +155,9 @@ val viewModelModule =
             com.marki19.simpmusic.viewModel.jam.JamViewModel(
                 get(),
                 get(),
-                get()
+                get(),
+                get(),
+                get(),
             )
         }
     }

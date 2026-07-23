@@ -115,33 +115,58 @@ function fairInsertPosition(queue, addedBy) {
 }
 
 // ─── Recommendations: interleave all participants' taste lists ───────────────
+const DEFAULT_POPULAR_TRACKS = [
+    { videoId: "dQw4w9WgXcQ", title: "Never Gonna Give You Up", artist: "Rick Astley", thumbnailUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", durationMs: 212000 },
+    { videoId: "kJQP7kiw5Fk", title: "Despacito", artist: "Luis Fonsi ft. Daddy Yankee", thumbnailUrl: "https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg", durationMs: 281000 },
+    { videoId: "fJ9rUzIMcZQ", title: "Bohemian Rhapsody", artist: "Queen", thumbnailUrl: "https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg", durationMs: 359000 },
+    { videoId: "JGwWNGJdvx8", title: "Shape of You", artist: "Ed Sheeran", thumbnailUrl: "https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg", durationMs: 233000 },
+    { videoId: "OPF0YbXqDm0", title: "Uptown Funk", artist: "Mark Ronson ft. Bruno Mars", thumbnailUrl: "https://i.ytimg.com/vi/OPF0YbXqDm0/hqdefault.jpg", durationMs: 270000 },
+    { videoId: "09R8_2nJtjg", title: "Sugar", artist: "Maroon 5", thumbnailUrl: "https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg", durationMs: 235000 },
+    { videoId: "4NRXx6U8ABQ", title: "Blinding Lights", artist: "The Weeknd", thumbnailUrl: "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg", durationMs: 200000 }
+];
+
 function buildRecommendations(tastes, existingQueue) {
-    if (!tastes || tastes.size === 0) return [];
     const existingIds = new Set(existingQueue.map((i) => i.videoId));
-    const lists = [...tastes.entries()];
-    const maxLen = Math.max(...lists.map(([, l]) => l.length));
-    const merged = [];
-    const seen = new Set(existingIds);
-    for (let i = 0; i < maxLen; i++) {
-        for (const [userId, tracks] of lists) {
-            if (i < tracks.length && !seen.has(tracks[i].videoId)) {
-                seen.add(tracks[i].videoId);
-                merged.push({
-                    queueId: uuidv4(),
-                    videoId: tracks[i].videoId,
-                    title: tracks[i].title,
-                    artist: tracks[i].artist,
-                    thumbnailUrl: tracks[i].thumbnailUrl,
-                    durationMs: tracks[i].durationMs,
-                    addedBy: userId,
-                    isRecommendation: true,
-                    addedTimestamp: Date.now(),
-                    voteCount: 0,
-                    orderWeight: 0,
-                });
-            }
+    const pool = [];
+
+    if (tastes && tastes.size > 0) {
+        for (const [, tracks] of tastes.entries()) {
+            pool.push(...tracks);
         }
     }
+
+    if (pool.length === 0) {
+        pool.push(...DEFAULT_POPULAR_TRACKS);
+    }
+
+    // Shuffle the pool
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    const merged = [];
+    const seen = new Set(existingIds);
+    for (const track of pool) {
+        if (!seen.has(track.videoId)) {
+            seen.add(track.videoId);
+            merged.push({
+                queueId: uuidv4(),
+                videoId: track.videoId,
+                title: track.title,
+                artist: track.artist,
+                thumbnailUrl: track.thumbnailUrl || null,
+                durationMs: track.durationMs || 0,
+                addedBy: "system",
+                isRecommendation: true,
+                addedTimestamp: Date.now(),
+                voteCount: 0,
+                orderWeight: 0,
+            });
+            if (merged.length >= 15) break;
+        }
+    }
+
     return merged;
 }
 
@@ -291,6 +316,28 @@ wss.on("connection", (ws) => {
                     if (!session || session.hostId !== currentUserId) return;
 
                     session.lastActivityTimestamp = Date.now();
+                    
+                    // If song changed, remove the new song and anything before it from the queue
+                    if (msg.payload?.state?.currentSongId && msg.payload.state.currentSongId !== session.state?.currentSongId) {
+                        const newSongId = msg.payload.state.currentSongId;
+                        const idx = session.queue.findIndex(i => i.videoId === newSongId);
+                        if (idx !== -1) {
+                            session.queue.splice(0, idx + 1);
+                            broadcast(currentRoomId, {
+                                type: "QUEUE_UPDATED",
+                                payload: {
+                                    queue: fullQueuePayload(session),
+                                    reason: "SONG_PLAYED"
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Strip the queue from the Host's sync state so it doesn't overwrite the Server's master queue
+                    if (msg.payload?.state?.queue) {
+                        delete msg.payload.state.queue;
+                    }
+
                     session.state = {
                         ...session.state,
                         ...msg.payload?.state,
@@ -406,6 +453,58 @@ wss.on("connection", (ws) => {
                                     queueId,
                                 },
                             });
+                            broadcast(currentRoomId, {
+                                type: "COMMAND",
+                                command: msg.command,
+                                payload: msg.payload,
+                                userId: currentUserId,
+                            });
+                            break;
+                        }
+
+                        case "PLAY_NOW": {
+                            const { videoId, title, artist, thumbnailUrl, durationMs } = msg.payload || {};
+                            if (!videoId) break;
+
+                            const newItem = {
+                                queueId: uuidv4(),
+                                videoId,
+                                title: title || "",
+                                artist: artist || "",
+                                thumbnailUrl: thumbnailUrl || null,
+                                durationMs: durationMs || 0,
+                                addedBy: currentUserId,
+                                addedTimestamp: Date.now(),
+                                voteCount: 0,
+                                orderWeight: 0,
+                                isRecommendation: false,
+                            };
+
+                            session.queue.splice(0, 0, newItem);
+                            
+                            if (session.recommendationsEnabled) {
+                                session.recommendations = buildRecommendations(session.tastes, session.queue);
+                            }
+
+                            broadcast(currentRoomId, {
+                                type: "QUEUE_UPDATED",
+                                payload: {
+                                    queue: fullQueuePayload(session),
+                                    reason: "SONG_ADDED",
+                                    queueId: newItem.queueId,
+                                    videoId: newItem.videoId,
+                                    title: newItem.title,
+                                    artist: newItem.artist,
+                                    thumbnailUrl: newItem.thumbnailUrl,
+                                    durationMs: newItem.durationMs,
+                                },
+                            });
+                            broadcast(currentRoomId, {
+                                type: "COMMAND",
+                                command: msg.command,
+                                payload: msg.payload,
+                                userId: currentUserId,
+                            });
                             break;
                         }
 
@@ -431,6 +530,12 @@ wss.on("connection", (ws) => {
                                     queueId,
                                     toIndex: clampedTo,
                                 },
+                            });
+                            broadcast(currentRoomId, {
+                                type: "COMMAND",
+                                command: msg.command,
+                                payload: msg.payload,
+                                userId: currentUserId,
                             });
                             break;
                         }
