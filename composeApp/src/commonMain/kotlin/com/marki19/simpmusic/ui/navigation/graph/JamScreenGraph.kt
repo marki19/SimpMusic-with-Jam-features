@@ -14,15 +14,25 @@ import com.marki19.simpmusic.ui.screen.jam.JamHostScreen
 import com.marki19.simpmusic.ui.screen.jam.JamMenuScreen
 import com.marki19.simpmusic.ui.screen.jam.JamSessionScreen
 import com.marki19.simpmusic.viewModel.jam.JamViewModel
+import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import org.koin.compose.koinInject
 
 fun NavGraphBuilder.jamScreenGraph(
     innerPadding: PaddingValues,
     navController: NavController,
+    showNowPlayingSheet: () -> Unit = {},
+    hideNavBar: () -> Unit = {},
+    showNavBar: (shouldShowNowPlayingSheet: Boolean) -> Unit = {},
 ) {
-    composable<JamMenuDestination> {
+    composable<JamMenuDestination> { backStackEntry ->
+        val dest = backStackEntry.toRoute<JamMenuDestination>()
         JamMenuScreen(
-            navController = navController
+            navController = navController,
+            initialVideoId = dest.initialVideoId,
+            initialTitle = dest.initialTitle,
+            initialArtist = dest.initialArtist,
+            initialThumbnailUrl = dest.initialThumbnailUrl,
+            initialDurationMs = dest.initialDurationMs,
         )
     }
     
@@ -63,7 +73,12 @@ fun NavGraphBuilder.jamScreenGraph(
         val params = entry.toRoute<JamSessionDestination>()
         JamSessionScreen(
             viewModel = jamViewModel,
-            onBack = { navController.navigateUp() }
+            onBack = {
+                navController.navigate(HomeDestination) {
+                    popUpTo(HomeDestination)
+                }
+            },
+            onOpenNowPlaying = showNowPlayingSheet,
         )
     }
 }

@@ -1644,7 +1644,24 @@ fun NowPlayingScreenContent(
                                                         if (isJamActive) {
                                                             navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamSessionDestination(roomCode = jamSessionState?.roomId ?: "")) { launchSingleTop = true }
                                                         } else {
-                                                            navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                            val songEntity = nowPlayingState?.songEntity
+                                                            val currentMedia = nowPlayingState?.mediaItem
+                                                            val videoId = songEntity?.videoId ?: currentMedia?.mediaId
+                                                            val title = songEntity?.title ?: currentMedia?.metadata?.title?.toString()
+                                                            val artist = songEntity?.artistName?.joinToString(", ") ?: currentMedia?.metadata?.artist?.toString()
+                                                            val thumbnail: String? = songEntity?.thumbnails ?: currentMedia?.metadata?.artworkUri?.toString()
+                                                            val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
+                                                            if (videoId != null) {
+                                                                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                                    initialVideoId = videoId,
+                                                                    initialTitle = title,
+                                                                    initialArtist = artist,
+                                                                    initialThumbnailUrl = thumbnail,
+                                                                    initialDurationMs = durationMs
+                                                                )) { launchSingleTop = true }
+                                                            } else {
+                                                                navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                            }
                                                         }
                                                     } else {
                                                         multiplatform.network.cmptoast.showToast(
@@ -1656,16 +1673,16 @@ fun NowPlayingScreenContent(
                                                 }
                                             },
                                             modifier = Modifier.drawBehind {
-                                            if (isJamActive) {
-                                                drawCircle(
-                                                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                                                        colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.6f), Color.Transparent),
-                                                        center = center,
-                                                        radius = size.width / 1.2f
-                                                    )
-                                                )
-                                            }
-                                        }
+                                 if (isJamActive) {
+                                     drawCircle(
+                                         brush = Brush.radialGradient(
+                                             colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.45f), Color(0xFF87CEEB).copy(alpha = 0.12f), Color.Transparent),
+                                             center = center,
+                                             radius = size.width / 2.0f
+                                         )
+                                     )
+                                 }
+                             }
                                     ) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Podcasts,
@@ -2206,7 +2223,24 @@ fun NowPlayingScreenContent(
                                                                 if (isJamActive) {
                                                                     navController?.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamSessionDestination(roomCode = jamSessionState?.roomId ?: "")) { launchSingleTop = true }
                                                                 } else {
-                                                                    navController?.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                                    val songEntity = nowPlayingState?.songEntity
+                                                                    val currentMedia = nowPlayingState?.mediaItem
+                                                                    val videoId = songEntity?.videoId ?: currentMedia?.mediaId
+                                                                    val title = songEntity?.title ?: currentMedia?.metadata?.title?.toString()
+                                                                    val artist = songEntity?.artistName?.joinToString(", ") ?: currentMedia?.metadata?.artist?.toString()
+                                                                    val thumbnail: String? = songEntity?.thumbnails ?: currentMedia?.metadata?.artworkUri?.toString()
+                                                                    val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
+                                                                    if (videoId != null) {
+                                                                        navController?.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                                            initialVideoId = videoId,
+                                                                            initialTitle = title,
+                                                                            initialArtist = artist,
+                                                                            initialThumbnailUrl = thumbnail,
+                                                                            initialDurationMs = durationMs
+                                                                        )) { launchSingleTop = true }
+                                                                    } else {
+                                                                        navController?.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                                    }
                                                                 }
                                                             } else {
                                                                 multiplatform.network.cmptoast.showToast(
@@ -2218,16 +2252,16 @@ fun NowPlayingScreenContent(
                                                         }
                                                     },
                                                     modifier = Modifier.drawBehind {
-                                                        if (isJamActive) {
-                                                            drawCircle(
-                                                                brush = Brush.radialGradient(
-                                                                    colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.6f), Color.Transparent),
-                                                                    center = center,
-                                                                    radius = size.width / 1.2f
-                                                                )
-                                                            )
-                                                        }
-                                                    }
+                                             if (isJamActive) {
+                                                 drawCircle(
+                                                     brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                                         colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.45f), Color(0xFF87CEEB).copy(alpha = 0.12f), Color.Transparent),
+                                                         center = center,
+                                                         radius = size.width / 2.0f
+                                                     )
+                                                 )
+                                             }
+                                         }
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Rounded.Podcasts,
@@ -2662,7 +2696,24 @@ fun NowPlayingScreenContent(
                                         if (isJamActive) {
                                             navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamSessionDestination(roomCode = jamSessionState?.roomId ?: "")) { launchSingleTop = true }
                                         } else {
-                                            navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                            val songEntity = nowPlayingState?.songEntity
+                                            val currentMedia = nowPlayingState?.mediaItem
+                                            val videoId = songEntity?.videoId ?: currentMedia?.mediaId
+                                            val title = songEntity?.title ?: currentMedia?.metadata?.title?.toString()
+                                            val artist = songEntity?.artistName?.joinToString(", ") ?: currentMedia?.metadata?.artist?.toString()
+                                            val thumbnail: String? = songEntity?.thumbnails ?: currentMedia?.metadata?.artworkUri?.toString()
+                                            val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
+                                            if (videoId != null) {
+                                                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                    initialVideoId = videoId,
+                                                    initialTitle = title,
+                                                    initialArtist = artist,
+                                                    initialThumbnailUrl = thumbnail,
+                                                    initialDurationMs = durationMs
+                                                )) { launchSingleTop = true }
+                                            } else {
+                                                navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                            }
                                         }
                                     } else {
                                         multiplatform.network.cmptoast.showToast(
@@ -2677,9 +2728,9 @@ fun NowPlayingScreenContent(
                                 if (isJamActive) {
                                     drawCircle(
                                         brush = Brush.radialGradient(
-                                            colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.6f), Color.Transparent),
+                                            colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.45f), Color(0xFF87CEEB).copy(alpha = 0.12f), Color.Transparent),
                                             center = center,
-                                            radius = size.width / 1.2f
+                                            radius = size.width / 2.0f
                                         )
                                     )
                                 }

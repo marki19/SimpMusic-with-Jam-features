@@ -27,51 +27,48 @@ fun JamHostScreen(
     val sessionState by viewModel.sessionState.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
 
+    // Immediately trigger session creation upon launching Host screen
+    LaunchedEffect(Unit) {
+        if (sessionState == null && !isConnecting) {
+            viewModel.createSession(
+                initialVideoId = initialVideoId,
+                initialTitle = initialTitle,
+                initialArtist = initialArtist,
+                initialThumbnailUrl = initialThumbnailUrl,
+                initialDurationMs = initialDurationMs
+            )
+        } else if (sessionState != null && !isConnecting) {
+            // We are already in a session, but want to host a new one. Tear down first.
+            viewModel.leaveSessionAndWait()
+            viewModel.createSession(
+                initialVideoId = initialVideoId,
+                initialTitle = initialTitle,
+                initialArtist = initialArtist,
+                initialThumbnailUrl = initialThumbnailUrl,
+                initialDurationMs = initialDurationMs
+            )
+        }
+    }
+
+    // Automatically navigate to Jam session screen as soon as session is ready
     LaunchedEffect(sessionState) {
         if (sessionState != null && sessionState!!.isHost) {
             onNavigateToSession()
         }
     }
 
-    if (isConnecting) {
-        var elapsedSeconds by remember { mutableIntStateOf(0) }
-        
-        LaunchedEffect(Unit) {
-            while (true) {
-                delay(1000)
-                elapsedSeconds++
-            }
+    var elapsedSeconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            elapsedSeconds++
         }
-        
-        AlertDialog(
-            onDismissRequest = { },
-            confirmButton = { },
-            title = { Text("Hosting Jam") },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(16.dp))
-                    if (elapsedSeconds < 5) {
-                        Text("Connecting to server...")
-                    } else {
-                        Text("Waking up server...")
-                        Text("This usually takes ~50s.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("${elapsedSeconds}s elapsed", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Host a Jam") },
+                title = { Text("Hosting Jam") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -82,42 +79,43 @@ fun JamHostScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text("Start a Jam Session", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Button(
-                onClick = { 
-                    viewModel.createSession(
-                        initialVideoId = initialVideoId,
-                        initialTitle = initialTitle,
-                        initialArtist = initialArtist,
-                        initialThumbnailUrl = initialThumbnailUrl,
-                        initialDurationMs = initialDurationMs
-                    ) 
-                },
-                enabled = !isConnecting,
-                modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),
-                colors = ButtonDefaults.buttonColors(contentColor = Color.Black)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Text("Create Room", color = Color.Black)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedButton(
-                onClick = onBack,
-                enabled = !isConnecting,
-                modifier = Modifier.fillMaxWidth(0.8f).height(50.dp)
-            ) {
-                Text("Cancel")
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    "Setting up your Jam room...",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (elapsedSeconds < 5) {
+                    Text("Connecting to server...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("Waking up server... (~50s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("${elapsedSeconds}s elapsed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Spacer(modifier = Modifier.height(32.dp))
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.width(160.dp).height(44.dp)
+                ) {
+                    Text("Cancel")
+                }
             }
         }
     }

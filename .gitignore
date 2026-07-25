@@ -45,3 +45,7 @@ sentry.properties
 /desktopApp/generated.conveyor.conf
 # Conveyor output directory
 /output/
+
+# Graphify knowledge graph outputs
+graphify-out/
+

@@ -70,6 +70,7 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -115,7 +116,7 @@ class SharedViewModel(
     private val playlistRepository: PlaylistRepository,
     private val lyricsCanvasRepository: LyricsCanvasRepository,
     private val cacheRepository: CacheRepository,
-    private val jamRepository: com.marki19.domain.jam.JamRepository
+    override val jamRepository: com.marki19.domain.jam.JamRepository
 ) : BaseViewModel() {
     var isFirstLiked: Boolean = false
     var isFirstMiniplayer: Boolean = false
@@ -132,6 +133,39 @@ class SharedViewModel(
 
     private var _sleepTimerState = MutableStateFlow(SleepTimerState(false, 0))
     val sleepTimerState: StateFlow<SleepTimerState> = _sleepTimerState
+
+    data class PendingLeaveJamPlayback(
+        val onConfirm: () -> Unit
+    )
+
+    private val _pendingLeaveJamPlayback = MutableStateFlow<PendingLeaveJamPlayback?>(null)
+    val pendingLeaveJamPlayback: StateFlow<PendingLeaveJamPlayback?> = _pendingLeaveJamPlayback.asStateFlow()
+
+    fun requestPlaybackWithJamCheck(onConfirmPlayback: () -> Unit) {
+        if (jamRepository.sessionState.value != null) {
+            _pendingLeaveJamPlayback.value = PendingLeaveJamPlayback(onConfirm = {
+                onConfirmPlayback()
+            })
+        } else {
+            onConfirmPlayback()
+        }
+    }
+
+    fun confirmLeaveJamAndPlay() {
+        viewModelScope.launch {
+            jamRepository.leaveSession()
+            // Wait for the asynchronous teardown event to fully wipe the player state
+            jamRepository.sessionState.first { it == null }
+            delay(200) // Small buffer to ensure JamPlayerSynchronizer's collector finishes hardReset()
+
+            _pendingLeaveJamPlayback.value?.onConfirm?.invoke()
+            _pendingLeaveJamPlayback.value = null
+        }
+    }
+
+    fun cancelLeaveJamAndPlay() {
+        _pendingLeaveJamPlayback.value = null
+    }
 
     private var regionCode: String? = null
     private var language: String? = null
@@ -303,42 +337,31 @@ class SharedViewModel(
         }
         viewModelScope.launch {
             mediaPlayerHandler.nowPlayingState
-                .distinctUntilChangedBy {
-                    it.songEntity?.videoId
-                }.collectLatest { state ->
+                .collectLatest { state ->
                     Logger.w(tag, "NowPlayingState is $state")
                     canvasJob?.cancel()
                     _nowPlayingState.value = state
-                    state.songEntity?.let { track ->
-                        _nowPlayingScreenData.value =
-                            NowPlayingScreenData(
-                                nowPlayingTitle = track.title,
-                                artistName =
-                                    track
-                                        .artistName
-                                        ?.joinToString(", ") ?: "",
-                                isVideo = false,
-                                thumbnailURL = null,
-                                canvasData = null,
-                                lyricsData = null,
-                                songInfoData = null,
-                                playlistName =
-                                    mediaPlayerHandler.queueData.value
-                                        ?.data
-                                        ?.playlistName ?: "",
-                            )
-                    }
-                    state.mediaItem.let { now ->
-                        _canvas.value = null
+                    val now = state.mediaItem
+                    val track = state.songEntity
+                    _nowPlayingScreenData.value =
+                        NowPlayingScreenData(
+                            nowPlayingTitle = track?.title ?: now.metadata.title?.toString() ?: "",
+                            artistName = track?.artistName?.joinToString(", ") ?: now.metadata.artist?.toString() ?: "",
+                            isVideo = now.isVideo(),
+                            thumbnailURL = now.metadata.artworkUri,
+                            canvasData = null,
+                            lyricsData = null,
+                            songInfoData = null,
+                            playlistName =
+                                mediaPlayerHandler.queueData.value
+                                    ?.data
+                                    ?.playlistName ?: "",
+                        )
+                    _canvas.value = null
+                    if (now.mediaId.isNotBlank()) {
                         getLikeStatus(now.mediaId)
                         getSongInfo(now.mediaId)
                         getFormat(now.mediaId)
-                        _nowPlayingScreenData.update {
-                            it.copy(
-                                thumbnailURL = now.metadata.artworkUri,
-                                isVideo = now.isVideo(),
-                            )
-                        }
                     }
                     state.songEntity?.let { song ->
                         _liked.value = song.liked == true
@@ -714,11 +737,9 @@ class SharedViewModel(
                 println("insertSong: $it")
                 songRepository
                     .getSongById(track.videoId)
-                    .collect { songEntity ->
-                        if (songEntity != null) {
-                            Logger.w("Check like", "loadMediaItemFromTrack ${songEntity.liked}")
-                            _liked.value = songEntity.liked
-                        }
+                    .firstOrNull()?.let { songEntity ->
+                        Logger.w("Check like", "loadMediaItemFromTrack ${songEntity.liked}")
+                        _liked.value = songEntity.liked
                     }
             }
             track.durationSeconds?.let {
@@ -1657,28 +1678,32 @@ class SharedViewModel(
     }
 
     fun addListToQueue(listTrack: ArrayList<Track>) {
-        viewModelScope.launch {
-            // If a jam session is active, broadcast each track to the jam room
-            val jamSession = jamRepository.sessionState.value
-            if (jamSession != null) {
-                listTrack.forEach { track ->
-                    jamRepository.sendCommand(
-                        com.marki19.domain.jam.JamCommand.AddToQueue(
-                            videoId = track.videoId,
-                            title = track.title,
-                            artist = track.artists?.joinToString(", ") { it.name } ?: "Unknown Artist",
-                            thumbnailUrl = track.thumbnails?.lastOrNull()?.url ?: "",
-                            durationMs = (track.durationSeconds ?: 0).toLong() * 1000L
-                        )
-                    )
+        if (jamRepository.sessionState.value != null) {
+            // Outside-jam "Add to Queue" while jam is active — prompt to leave first
+            requestPlaybackWithJamCheck {
+                viewModelScope.launch {
+                    mediaPlayerHandler.resetSongAndQueue()
+                    if (listTrack.isNotEmpty()) {
+                        loadMediaItemFromTrack(listTrack.first(), SONG_CLICK)
+                        if (listTrack.size > 1) {
+                            mediaPlayerHandler.loadMoreCatalog(ArrayList(listTrack.subList(1, listTrack.size)), isAddToQueue = true)
+                        }
+                    }
                 }
             }
-            if (listTrack.size == 1 && dataStoreManager.endlessQueue.first() == TRUE) {
-                mediaPlayerHandler.playNext(listTrack.first())
-                makeToast(getString(Res.string.play_next))
-            } else {
-                mediaPlayerHandler.loadMoreCatalog(listTrack)
-                makeToast(getString(Res.string.added_to_queue))
+        } else {
+            viewModelScope.launch {
+                val isCurrentlyPlaying = mediaPlayerHandler.controlState.value.isPlaying
+                val hasNowPlaying = mediaPlayerHandler.nowPlayingState.value?.songEntity != null || mediaPlayerHandler.nowPlaying.value != null
+                if (!isCurrentlyPlaying && !hasNowPlaying && listTrack.isNotEmpty()) {
+                    loadMediaItemFromTrack(listTrack.first(), SONG_CLICK)
+                    if (listTrack.size > 1) {
+                        mediaPlayerHandler.loadMoreCatalog(ArrayList(listTrack.subList(1, listTrack.size)), isAddToQueue = true)
+                    }
+                } else {
+                    mediaPlayerHandler.loadMoreCatalog(listTrack, isAddToQueue = true)
+                    makeToast(getString(Res.string.added_to_queue))
+                }
             }
         }
     }

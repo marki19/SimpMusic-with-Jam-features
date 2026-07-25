@@ -21,8 +21,13 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.minutes
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
+import com.maxrave.domain.utils.toTrack
+import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.data.model.searchResult.songs.Artist
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 class JamViewModel(
     private val jamRepository: JamRepository,
     private val songRepository: SongRepository,
@@ -37,8 +42,9 @@ class JamViewModel(
     val chatMessages: StateFlow<List<JamCommand.ChatMessage>> = jamRepository.chatMessages
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    var localUserId: String? = null
-        private set
+    private var _localUserId: String? = null
+    val localUserId: String?
+        get() = _localUserId
 
     // ── UI-only state ─────────────────────────────────────────────────────────
 
@@ -52,11 +58,61 @@ class JamViewModel(
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
-    // ── Heartbeat ─────────────────────────────────────────────────────────────
+    private val _unreadChatCount = MutableStateFlow(0)
+    val unreadChatCount: StateFlow<Int> = _unreadChatCount.asStateFlow()
+
+    private var isChatSheetOpen = false
+
+    // Cache initial track for JamSessionScreen to show while server state populates
+    private var _initialTrack: Track? = null
+    val initialTrack: Track?
+        get() = _initialTrack
+
+    fun setChatSheetOpen(isOpen: Boolean) {
+        isChatSheetOpen = isOpen
+        if (isOpen) {
+            _unreadChatCount.value = 0
+        }
+    }
+
+    fun resetUnreadChatCount() {
+        _unreadChatCount.value = 0
+    }
 
     private var heartbeatJob: kotlinx.coroutines.Job? = null
 
+    private var pendingOutgoingSongId: String? = null
+
     init {
+        viewModelScope.launch {
+            var lastCount = 0
+            chatMessages.collect { messages ->
+                if (messages.size > lastCount) {
+                    val newMessages = messages.drop(lastCount)
+                    if (!isChatSheetOpen) {
+                        val hasOtherSender = newMessages.any { it.senderId != _localUserId }
+                        if (hasOtherSender) {
+                            _unreadChatCount.value += newMessages.count { it.senderId != _localUserId }
+                        }
+                    }
+                }
+                lastCount = messages.size
+            }
+        }
+
+        // Interim client fix for Bug A: strip auto-inserted outgoing song if server re-inserted it
+        viewModelScope.launch {
+            sessionState.collect { state ->
+                val staleId = pendingOutgoingSongId ?: return@collect
+                val session = state ?: return@collect
+                val autoInserted = session.playbackState.queue.firstOrNull {
+                    it.videoId.cleanId() == staleId
+                } ?: return@collect
+                jamRepository.sendCommand(JamCommand.RemoveQueueItem(autoInserted.queueId, autoInserted.videoId))
+                pendingOutgoingSongId = null
+            }
+        }
+
         viewModelScope.launch {
             var previousState: JamSessionState? = null
             sessionState.collect { state ->
@@ -153,7 +209,7 @@ class JamViewModel(
             val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
             val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Host"
             var rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
-            
+
             if (rawImageUrl.isBlank() && account?.netscapeCookie != null) {
                 val accountInfoList = accountRepository.getAccountInfo(account.netscapeCookie!!).firstOrNull()
                 rawImageUrl = accountInfoList?.firstOrNull()?.thumbnails?.lastOrNull()?.url ?: ""
@@ -161,20 +217,23 @@ class JamViewModel(
                     dataStoreManager.putString("AccountThumbUrl", rawImageUrl)
                 }
             }
-            
+
             val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
-            
-            localUserId = userId
+
+            _localUserId = userId
             jamRepository.createSession(userId, name, imageUrl)
             syncTaste()
-            
+
             val activeTrack = mediaPlayerHandler.nowPlayingState.value.track
             val effectiveVideoId = initialVideoId ?: activeTrack?.videoId
             val effectiveTitle = initialTitle ?: activeTrack?.title
             val effectiveArtist = initialArtist ?: activeTrack?.artists?.firstOrNull()?.name
             val effectiveThumbnailUrl = initialThumbnailUrl ?: activeTrack?.thumbnails?.lastOrNull()?.url
             val effectiveDurationMs = initialDurationMs ?: ((activeTrack?.durationSeconds ?: 0) * 1000L)
-            
+
+            // Cache the initial track for JamSessionScreen to show while server state populates
+            _initialTrack = activeTrack
+
             if (effectiveVideoId != null) {
                 jamRepository.sessionState.first { it != null }
                 jamRepository.sendCommand(JamCommand.PlayNow(
@@ -209,14 +268,27 @@ class JamViewModel(
             
             val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
 
-            localUserId = userId
+            _localUserId = userId
             jamRepository.joinSession(roomId, userId, name, imageUrl)
             syncTaste()
         }
     }
 
     fun leaveSession() {
-        viewModelScope.launch { jamRepository.leaveSession() }
+        viewModelScope.launch {
+            jamRepository.leaveSession()
+            _initialTrack = null
+        }
+    }
+
+    suspend fun leaveSessionAndWait() {
+        jamRepository.leaveSession()
+        jamRepository.sessionState.first { it == null }
+        _initialTrack = null
+    }
+
+    fun clearInitialTrack() {
+        _initialTrack = null
     }
 
     // ── Permissions ───────────────────────────────────────────────────────────
@@ -228,7 +300,9 @@ class JamViewModel(
     // ── Queue actions ─────────────────────────────────────────────────────────
 
     fun removeFromQueue(queueId: String) {
-        viewModelScope.launch { jamRepository.sendCommand(JamCommand.RemoveQueueItem(queueId)) }
+        val targetVideoId = sessionState.value?.playbackState?.queue
+            ?.find { it.queueId == queueId }?.videoId ?: ""
+        viewModelScope.launch { jamRepository.sendCommand(JamCommand.RemoveQueueItem(queueId, targetVideoId)) }
     }
 
     fun addToQueue(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
@@ -244,6 +318,7 @@ class JamViewModel(
     };
 
     fun playNow(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
+        pendingOutgoingSongId = sessionState.value?.playbackState?.currentSongId?.cleanId()
         viewModelScope.launch {
             jamRepository.sendCommand(JamCommand.PlayNow(
                 videoId = videoId,
@@ -278,6 +353,14 @@ class JamViewModel(
     }
 
     // ── Playback controls ─────────────────────────────────────────────────────
+
+    fun play() {
+        viewModelScope.launch { jamRepository.sendCommand(JamCommand.Play) }
+    }
+
+    fun pause() {
+        viewModelScope.launch { jamRepository.sendCommand(JamCommand.Pause) }
+    }
 
     fun setShuffle(enabled: Boolean) {
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.SetShuffle(enabled)) }

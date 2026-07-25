@@ -86,11 +86,11 @@ fun JamAddSongBottomSheet(
                                     isPlaying = false,
                                     onClickListener = {
                                         jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                        sharedViewModel.makeToast("Now playing: ${item.title}")
+                                        onDismissRequest()
                                     },
                                     onAddToQueue = {
                                         jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                        sharedViewModel.makeToast("Song added to queue")
+                                        sharedViewModel.makeToast("Song added to Jam queue")
                                     }
                                 )
                         }
@@ -113,11 +113,11 @@ fun JamAddSongBottomSheet(
                                 isPlaying = false,
                                 onClickListener = {
                                     jamViewModel.playNow(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
-                                    sharedViewModel.makeToast("Now playing: ${song.title}")
+                                    onDismissRequest()
                                 },
                                 onAddToQueue = {
                                     jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
-                                    sharedViewModel.makeToast("Song added to queue")
+                                    sharedViewModel.makeToast("Song added to Jam queue")
                                 }
                             )
                         }

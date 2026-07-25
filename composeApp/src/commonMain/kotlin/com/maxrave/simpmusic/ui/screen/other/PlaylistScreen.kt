@@ -1232,11 +1232,28 @@ fun PlaylistScreen(
                             )
                         }
                     }
+                    val jamViewModel: com.marki19.simpmusic.viewModel.jam.JamViewModel = koinInject()
+                    val addToJamQueue = {
+                        viewModel.getFullTracks { tracks ->
+                            tracks.forEach { track ->
+                                jamViewModel.addToQueue(
+                                    videoId = track.videoId,
+                                    title = track.title,
+                                    artist = track.artists?.joinToString(", ") { it.name } ?: "Unknown Artist",
+                                    thumbnailUrl = track.thumbnails?.lastOrNull()?.url ?: "",
+                                    durationMs = (track.durationSeconds ?: 0).toLong() * 1000L
+                                )
+                            }
+                            sharedViewModel.makeToast("Added ${tracks.size} tracks to Jam Queue")
+                        }
+                    }
                     PlaylistBottomSheet(
                         onDismiss = { playlistBottomSheetShow = false },
                         playlistId = data.id,
                         playlistName = data.title,
                         isYourYouTubePlaylist = isYourYouTubePlaylist && !data.isRadio,
+                        onAddToQueue = if (data.isRadio) null else addToQueue,
+                        onAddToJamQueue = addToJamQueue,
                         onSaveToLocal = {
                             viewModel.getFullTracks { track ->
                                 viewModel.saveToLocal(track)
@@ -1257,7 +1274,6 @@ fun PlaylistScreen(
                         onEditTitle = { newTitle ->
                             viewModel.updatePlaylistTitle(newTitle, data.id)
                         },
-                        onAddToQueue = if (data.isRadio) null else addToQueue,
                     )
                 }
                 AnimatedVisibility(

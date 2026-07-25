@@ -26,6 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +38,7 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -146,11 +149,6 @@ fun App(viewModel: SharedViewModel = koinInject()) {
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
     val customThemeColorHex by viewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
-    // MiniPlayer visibility logic
-    var isShowMiniPlayer by rememberSaveable {
-        mutableStateOf(true)
-    }
-
     // Now playing screen
     var isShowNowPlaylistScreen by rememberSaveable {
         mutableStateOf(false)
@@ -159,23 +157,6 @@ fun App(viewModel: SharedViewModel = koinInject()) {
     // Fullscreen
     var isInFullscreen by rememberSaveable {
         mutableStateOf(false)
-    }
-
-    var isNavBarVisible by rememberSaveable {
-        mutableStateOf(true)
-    }
-
-    var shouldShowUpdateDialog by rememberSaveable {
-        mutableStateOf(false)
-    }
-
-    val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
-
-    LaunchedEffect(nowPlayingData) {
-        isShowMiniPlayer = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
     }
 
     LaunchedEffect(intent) {
@@ -325,15 +306,34 @@ fun App(viewModel: SharedViewModel = koinInject()) {
         }
     }
 
+    var shouldShowUpdateDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    val hazeState =
+        rememberHazeState(
+            blurEnabled = true,
+        )
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination
+    val isJamScreen = currentRoute?.hierarchy?.any {
+        it.hasRoute(com.marki19.simpmusic.ui.navigation.destination.jam.JamSessionDestination::class)
+    } == true
+    val isInFullscreenRoute = currentRoute?.hierarchy?.any {
+        it.hasRoute(FullscreenDestination::class)
+    } == true
+
+    val hasTrack = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
+    val isShowMiniPlayer = hasTrack && !isJamScreen && !isInFullscreenRoute
+    val isNavBarVisible = !isJamScreen && !isInFullscreenRoute
+
     LaunchedEffect(navBackStackEntry) {
         Logger.d("MainActivity", "Current destination: ${navBackStackEntry?.destination?.route}")
-        if (navBackStackEntry?.destination?.route?.contains("FullscreenDestination") == true) {
+        if (currentRoute?.route?.contains("FullscreenDestination") == true) {
             isShowNowPlaylistScreen = false
         }
-        isInFullscreen = navBackStackEntry?.destination?.hierarchy?.any {
-            it.hasRoute(FullscreenDestination::class)
-        } == true
+        isInFullscreen = isInFullscreenRoute
     }
     var isScrolledToTop by rememberSaveable {
         mutableStateOf(false)
@@ -385,7 +385,24 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                                 if (isJamActive) {
                                                     navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamSessionDestination(roomCode = jamSessionState?.roomId ?: "")) { launchSingleTop = true }
                                                 } else {
-                                                    navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                    val currentItem = nowPlayingData?.mediaItem
+                                                    val songEntity = nowPlayingData?.songEntity
+                                                    val videoId = songEntity?.videoId ?: currentItem?.mediaId
+                                                    val title = songEntity?.title ?: currentItem?.metadata?.title?.toString()
+                                                    val artist = songEntity?.artistName?.joinToString(", ") ?: currentItem?.metadata?.artist?.toString()
+                                                    val thumbnail = songEntity?.thumbnails ?: currentItem?.metadata?.artworkUri?.toString()
+                                                    val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
+                                                    if (videoId != null) {
+                                                        navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                            initialVideoId = videoId,
+                                                            initialTitle = title,
+                                                            initialArtist = artist,
+                                                            initialThumbnailUrl = thumbnail,
+                                                            initialDurationMs = durationMs
+                                                        )) { launchSingleTop = true }
+                                                    } else {
+                                                        navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                    }
                                                 }
                                             } else {
                                                 multiplatform.network.cmptoast.showToast(
@@ -517,7 +534,24 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                                 if (isJamActive) {
                                                     navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamSessionDestination(roomCode = jamSessionState?.roomId ?: "")) { launchSingleTop = true }
                                                 } else {
-                                                    navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                    val currentItem = nowPlayingData?.mediaItem
+                                                    val songEntity = nowPlayingData?.songEntity
+                                                    val videoId = songEntity?.videoId ?: currentItem?.mediaId
+                                                    val title = songEntity?.title ?: currentItem?.metadata?.title?.toString()
+                                                    val artist = songEntity?.artistName?.joinToString(", ") ?: currentItem?.metadata?.artist?.toString()
+                                                    val thumbnail = songEntity?.thumbnails ?: currentItem?.metadata?.artworkUri?.toString()
+                                                    val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
+                                                    if (videoId != null) {
+                                                        navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                            initialVideoId = videoId,
+                                                            initialTitle = title,
+                                                            initialArtist = artist,
+                                                            initialThumbnailUrl = thumbnail,
+                                                            initialDurationMs = durationMs
+                                                        )) { launchSingleTop = true }
+                                                    } else {
+                                                        navController.navigate(JamMenuDestination) { launchSingleTop = true }
+                                                    }
                                                 }
                                             } else {
                                                 multiplatform.network.cmptoast.showToast(
@@ -617,6 +651,28 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                 style = typo().bodySmall,
                             )
                         },
+                    )
+                }
+
+                val pendingLeaveJam by viewModel.pendingLeaveJamPlayback.collectAsStateWithLifecycle()
+                if (pendingLeaveJam != null) {
+                    AlertDialog(
+                        onDismissRequest = { viewModel.cancelLeaveJamAndPlay() },
+                        title = { Text("Leave Jam Session?") },
+                        text = { Text("Playing this song will leave your current Jam session. Continue?") },
+                        confirmButton = {
+                            Button(
+                                onClick = { viewModel.confirmLeaveJamAndPlay() },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("Leave Jam", color = Color.White)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.cancelLeaveJamAndPlay() }) {
+                                Text(stringResource(Res.string.cancel))
+                            }
+                        }
                     )
                 }
 

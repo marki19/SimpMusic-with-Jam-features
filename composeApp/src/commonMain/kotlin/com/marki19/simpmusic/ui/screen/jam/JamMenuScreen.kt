@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.marki19.simpmusic.ui.navigation.destination.jam.JamGuestDestination
@@ -18,6 +19,11 @@ import com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination
 @Composable
 fun JamMenuScreen(
     navController: NavController,
+    initialVideoId: String? = null,
+    initialTitle: String? = null,
+    initialArtist: String? = null,
+    initialThumbnailUrl: String? = null,
+    initialDurationMs: Long? = null,
 ) {
     Scaffold(
         topBar = {
@@ -64,7 +70,15 @@ fun JamMenuScreen(
             
             Button(
                 onClick = {
-                    navController.navigate(JamHostDestination()) {
+                    navController.navigate(
+                        JamHostDestination(
+                            initialVideoId = initialVideoId,
+                            initialTitle = initialTitle,
+                            initialArtist = initialArtist,
+                            initialThumbnailUrl = initialThumbnailUrl,
+                            initialDurationMs = initialDurationMs,
+                        )
+                    ) {
                         launchSingleTop = true
                     }
                 },
@@ -74,9 +88,9 @@ fun JamMenuScreen(
                 ),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
-                Icon(Icons.Rounded.Podcasts, contentDescription = null)
+                Icon(Icons.Rounded.Podcasts, contentDescription = null, tint = Color.Black)
                 Spacer(Modifier.width(12.dp))
-                Text("Host a Jam", style = MaterialTheme.typography.titleMedium)
+                Text("Host a Jam", style = MaterialTheme.typography.titleMedium, color = Color.Black)
             }
             
             Spacer(modifier = Modifier.height(16.dp))

@@ -111,6 +111,9 @@ fun AppNavigationGraph(
         jamScreenGraph(
             innerPadding = innerPadding,
             navController = navController,
+            showNowPlayingSheet = showNowPlayingSheet,
+            hideNavBar = hideNavBar,
+            showNavBar = showNavBar,
         )
     }
 }
