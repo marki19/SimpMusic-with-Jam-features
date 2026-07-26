@@ -1652,7 +1652,7 @@ fun NowPlayingScreenContent(
                                                             val thumbnail: String? = songEntity?.thumbnails ?: currentMedia?.metadata?.artworkUri?.toString()
                                                             val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
                                                             if (videoId != null) {
-                                                                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
                                                                     initialVideoId = videoId,
                                                                     initialTitle = title,
                                                                     initialArtist = artist,
@@ -2231,13 +2231,13 @@ fun NowPlayingScreenContent(
                                                                     val thumbnail: String? = songEntity?.thumbnails ?: currentMedia?.metadata?.artworkUri?.toString()
                                                                     val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
                                                                     if (videoId != null) {
-                                                                        navController?.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
-                                                                            initialVideoId = videoId,
-                                                                            initialTitle = title,
-                                                                            initialArtist = artist,
-                                                                            initialThumbnailUrl = thumbnail,
-                                                                            initialDurationMs = durationMs
-                                                                        )) { launchSingleTop = true }
+                                                                        navController?.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
+                                                                         initialVideoId = videoId,
+                                                                         initialTitle = title,
+                                                                         initialArtist = artist,
+                                                                         initialThumbnailUrl = thumbnail,
+                                                                         initialDurationMs = durationMs
+                                                                     )) { launchSingleTop = true }
                                                                     } else {
                                                                         navController?.navigate(JamMenuDestination) { launchSingleTop = true }
                                                                     }
@@ -2704,7 +2704,7 @@ fun NowPlayingScreenContent(
                                             val thumbnail: String? = songEntity?.thumbnails ?: currentMedia?.metadata?.artworkUri?.toString()
                                             val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
                                             if (videoId != null) {
-                                                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
                                                     initialVideoId = videoId,
                                                     initialTitle = title,
                                                     initialArtist = artist,

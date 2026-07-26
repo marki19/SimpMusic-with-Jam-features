@@ -362,10 +362,17 @@ fun JamSessionScreen(
                         it.videoId.cleanId() == currentSongId
                     }
                     val initialTrack = viewModel.initialTrack
+                    val handlerTrack = mediaPlayerHandler.nowPlayingState.value?.track
 
-                    val resolvedTitle = currentItem?.title ?: initialTrack?.title
-                    val resolvedArtist = currentItem?.artist ?: initialTrack?.artists?.joinToString(", ") { it.name }
-                    val resolvedArtwork = currentItem?.thumbnailUrl ?: initialTrack?.thumbnails?.lastOrNull()?.url
+                    val resolvedTitle = currentItem?.title?.ifBlank { null }
+                        ?: initialTrack?.title?.ifBlank { null }
+                        ?: handlerTrack?.title?.ifBlank { null }
+                    val resolvedArtist = currentItem?.artist?.ifBlank { null }
+                        ?: initialTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
+                        ?: handlerTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
+                    val resolvedArtwork = currentItem?.thumbnailUrl?.ifBlank { null }
+                        ?: initialTrack?.thumbnails?.lastOrNull()?.url
+                        ?: handlerTrack?.thumbnails?.lastOrNull()?.url
 
                     LaunchedEffect(currentItem?.videoId) {
                         if (currentItem != null) viewModel.clearInitialTrack()
@@ -386,6 +393,8 @@ fun JamSessionScreen(
                                 }
                             }
                         )
+                    } else if (session.playbackState.currentSongId.isNullOrBlank() && session.playbackState.queue.isEmpty()) {
+                        NowPlayingEmptyRow()
                     } else {
                         NowPlayingSkeletonRow()
                     }
@@ -1226,6 +1235,44 @@ private fun PermissionRow(label: String, checked: Boolean, onCheckedChange: (Boo
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun NowPlayingEmptyRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Rounded.Podcasts,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column {
+            Text(
+                "Nothing is playing",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                "Add a song to start the jam!",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

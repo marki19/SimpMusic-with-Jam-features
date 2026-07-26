@@ -149,6 +149,17 @@ fun App(viewModel: SharedViewModel = koinInject()) {
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
     val customThemeColorHex by viewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    // Update dialog state
+    var shouldShowUpdateDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(updateData) {
+        if (updateData != null && !viewModel.showedUpdateDialog) {
+            shouldShowUpdateDialog = true
+        }
+    }
+
     // Now playing screen
     var isShowNowPlaylistScreen by rememberSaveable {
         mutableStateOf(false)
@@ -297,19 +308,6 @@ fun App(viewModel: SharedViewModel = koinInject()) {
         }
     }
 
-    LaunchedEffect(updateData) {
-        val response = updateData ?: return@LaunchedEffect
-        if (viewModel.showedUpdateDialog &&
-            response.tagName != getString(Res.string.version_format, VersionManager.getVersionName())
-        ) {
-            shouldShowUpdateDialog = true
-        }
-    }
-
-    var shouldShowUpdateDialog by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     val hazeState =
         rememberHazeState(
             blurEnabled = true,
@@ -393,7 +391,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                                     val thumbnail = songEntity?.thumbnails ?: currentItem?.metadata?.artworkUri?.toString()
                                                     val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
                                                     if (videoId != null) {
-                                                        navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                        navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
                                                             initialVideoId = videoId,
                                                             initialTitle = title,
                                                             initialArtist = artist,
@@ -482,12 +480,8 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                 AppNavigationGraph(
                                     innerPadding = innerPadding,
                                     navController = navController,
-                                    hideNavBar = {
-                                        isNavBarVisible = false
-                                    },
-                                    showNavBar = {
-                                        isNavBarVisible = true
-                                    },
+                                    hideNavBar = {},
+                                    showNavBar = {},
                                     showNowPlayingSheet = {
                                         isShowNowPlaylistScreen = true
                                     },
@@ -542,7 +536,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                                     val thumbnail = songEntity?.thumbnails ?: currentItem?.metadata?.artworkUri?.toString()
                                                     val durationMs = (songEntity?.durationSeconds?.toLong() ?: 0L) * 1000L
                                                     if (videoId != null) {
-                                                        navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                                                        navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
                                                             initialVideoId = videoId,
                                                             initialTitle = title,
                                                             initialArtist = artist,

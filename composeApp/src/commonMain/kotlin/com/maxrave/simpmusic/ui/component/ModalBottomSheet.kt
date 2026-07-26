@@ -1863,7 +1863,7 @@ fun NowPlayingBottomSheet(
                             textString = "Start a Jam"
                         ) {
                             onNavigateToOtherScreen()
-                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
                                 initialVideoId = uiState.songUIState.videoId,
                                 initialTitle = uiState.songUIState.title,
                                 initialArtist = uiState.songUIState.listArtists.firstOrNull()?.name,

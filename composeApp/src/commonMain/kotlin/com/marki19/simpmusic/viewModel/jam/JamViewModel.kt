@@ -2,6 +2,7 @@ package com.marki19.simpmusic.viewModel.jam
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.marki19.domain.jam.cleanId
 import com.marki19.domain.jam.JamCommand
 import com.marki19.domain.jam.JamPermissions
 import com.marki19.domain.jam.JamRepository
@@ -193,6 +194,13 @@ class JamViewModel(
 
     // ── Session lifecycle ─────────────────────────────────────────────────────
 
+    fun cancelConnection() {
+        _isConnecting.value = false
+        viewModelScope.launch {
+            jamRepository.leaveSession()
+        }
+    }
+
     fun createSession(
         initialVideoId: String? = null,
         initialTitle: String? = null,
@@ -202,6 +210,7 @@ class JamViewModel(
     ) {
         viewModelScope.launch {
             _isConnecting.value = true
+            try {
             val account = accountRepository.getUsedGoogleAccount().firstOrNull()
             val dsName = dataStoreManager.getString("AccountName").firstOrNull()
             val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
@@ -225,14 +234,36 @@ class JamViewModel(
             syncTaste()
 
             val activeTrack = mediaPlayerHandler.nowPlayingState.value.track
-            val effectiveVideoId = initialVideoId ?: activeTrack?.videoId
-            val effectiveTitle = initialTitle ?: activeTrack?.title
-            val effectiveArtist = initialArtist ?: activeTrack?.artists?.firstOrNull()?.name
-            val effectiveThumbnailUrl = initialThumbnailUrl ?: activeTrack?.thumbnails?.lastOrNull()?.url
+            val fallbackMediaItem = mediaPlayerHandler.nowPlaying.value
+
+            val effectiveVideoId = initialVideoId ?: activeTrack?.videoId ?: fallbackMediaItem?.mediaId
+            val effectiveTitle = initialTitle ?: activeTrack?.title ?: fallbackMediaItem?.metadata?.title?.toString()
+            val effectiveArtist = initialArtist ?: activeTrack?.artists?.firstOrNull()?.name ?: fallbackMediaItem?.metadata?.artist?.toString()
+            val effectiveThumbnailUrl = initialThumbnailUrl ?: activeTrack?.thumbnails?.lastOrNull()?.url ?: fallbackMediaItem?.metadata?.artworkUri?.toString()
             val effectiveDurationMs = initialDurationMs ?: ((activeTrack?.durationSeconds ?: 0) * 1000L)
 
-            // Cache the initial track for JamSessionScreen to show while server state populates
-            _initialTrack = activeTrack
+            // Cache initial track from effective metadata so JamSessionScreen displays it instantly
+            if (!effectiveVideoId.isNullOrBlank()) {
+                _initialTrack = Track(
+                    album = null,
+                    artists = if (!effectiveArtist.isNullOrBlank()) listOf(Artist(name = effectiveArtist, id = null)) else emptyList(),
+                    duration = "",
+                    durationSeconds = ((effectiveDurationMs ?: 0L) / 1000L).toInt(),
+                    isAvailable = true,
+                    isExplicit = false,
+                    likeStatus = null,
+                    thumbnails = if (!effectiveThumbnailUrl.isNullOrBlank()) listOf(Thumbnail(url = effectiveThumbnailUrl, width = 544, height = 544)) else emptyList(),
+                    title = effectiveTitle ?: "",
+                    videoId = effectiveVideoId,
+                    videoType = null,
+                    category = null,
+                    feedbackTokens = null,
+                    resultType = null,
+                    year = ""
+                )
+            } else {
+                _initialTrack = activeTrack
+            }
 
             if (effectiveVideoId != null) {
                 jamRepository.sessionState.first { it != null }
@@ -244,12 +275,18 @@ class JamViewModel(
                     durationMs = effectiveDurationMs
                 ))
             }
+            } catch (e: Exception) {
+                // FIX: Reset connection state if the server fails to wake up
+                _isConnecting.value = false
+                e.printStackTrace()
+            }
         }
     }
 
     fun joinSession(roomId: String) {
         viewModelScope.launch {
             _isConnecting.value = true
+            try {
             val account = accountRepository.getUsedGoogleAccount().firstOrNull()
             val dsName = dataStoreManager.getString("AccountName").firstOrNull()
             val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
@@ -271,6 +308,10 @@ class JamViewModel(
             _localUserId = userId
             jamRepository.joinSession(roomId, userId, name, imageUrl)
             syncTaste()
+            } catch (e: Exception) {
+                _isConnecting.value = false
+                e.printStackTrace()
+            }
         }
     }
 
@@ -306,14 +347,21 @@ class JamViewModel(
     }
 
     fun addToQueue(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
-        viewModelScope.launch {
-            jamRepository.sendCommand(JamCommand.AddToQueue(
-                videoId = videoId,
-                title = title,
-                artist = artist,
-                thumbnailUrl = thumbnailUrl,
-                durationMs = durationMs
-            ))
+        val currentSongId = sessionState.value?.playbackState?.currentSongId
+        
+        // FIX: If the Jam room is empty, adding a song should instantly establish it as the current song.
+        if (currentSongId.isNullOrBlank()) {
+            playNow(videoId, title, artist, thumbnailUrl, durationMs)
+        } else {
+            viewModelScope.launch {
+                jamRepository.sendCommand(JamCommand.AddToQueue(
+                    videoId = videoId,
+                    title = title,
+                    artist = artist,
+                    thumbnailUrl = thumbnailUrl,
+                    durationMs = durationMs
+                ))
+            }
         }
     };
 

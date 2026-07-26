@@ -965,7 +965,7 @@ fun AlbumScreen(
                         onSaveToLocal = {},
                         onStartJam = {
                             val track = uiState.listTrack.firstOrNull()
-                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamHostDestination(
+                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
                                 initialVideoId = track?.videoId,
                                 initialTitle = track?.title,
                                 initialArtist = track?.artists?.firstOrNull()?.name,

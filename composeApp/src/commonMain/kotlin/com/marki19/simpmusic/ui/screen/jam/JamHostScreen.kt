@@ -70,7 +70,10 @@ fun JamHostScreen(
             TopAppBar(
                 title = { Text("Hosting Jam") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { 
+                        viewModel.cancelConnection() // FIX: Reset state
+                        onBack() 
+                    }) {
                         Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -111,7 +114,10 @@ fun JamHostScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
                 OutlinedButton(
-                    onClick = onBack,
+                    onClick = {
+                        viewModel.cancelConnection() // FIX: Reset state
+                        onBack()
+                    },
                     modifier = Modifier.width(160.dp).height(44.dp)
                 ) {
                     Text("Cancel")

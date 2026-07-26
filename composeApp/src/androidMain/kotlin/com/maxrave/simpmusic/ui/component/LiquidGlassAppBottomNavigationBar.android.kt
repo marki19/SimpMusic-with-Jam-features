@@ -1,4 +1,4 @@
-package com.maxrave.simpmusic.ui.component
+    package com.maxrave.simpmusic.ui.component
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
@@ -163,26 +163,8 @@ actual fun LiquidGlassAppBottomNavigationBar(
         isExpanded = !isInSearchDestination
     }
 
-    var updateConstraints by remember {
-        mutableStateOf(true)
-    }
-
-    var constraintSet by remember {
-        mutableStateOf(
-            decoupledConstraints(isShowMiniPlayer, isExpanded),
-        )
-    }
-
-    LaunchedEffect(isShowMiniPlayer, isExpanded) {
-        constraintSet = decoupledConstraints(isShowMiniPlayer, isExpanded)
-        updateConstraints = false
-    }
-
-    LaunchedEffect(updateConstraints) {
-        if (updateConstraints) {
-            constraintSet = decoupledConstraints(isShowMiniPlayer, isExpanded)
-            updateConstraints = false
-        }
+    val constraintSet = remember(isShowMiniPlayer, isExpanded) {
+        decoupledConstraints(isShowMiniPlayer, isExpanded)
     }
 
     LaunchedEffect(isScrolledToTop) {
@@ -236,8 +218,7 @@ actual fun LiquidGlassAppBottomNavigationBar(
                 Modifier
                     .padding(start = 16.dp)
                     .wrapContentSize()
-                    .layoutId("toolbar")
-                    .onGloballyPositioned { updateConstraints = true },
+                    .layoutId("toolbar"),
         ) {
             if (isExpanded) {
                 LiquidGlassTabBar(
@@ -336,11 +317,7 @@ private fun decoupledConstraints(
                 bottom.linkTo(toolbar.top, margin = 12.dp)
                 width = if (isMiniplayerShow) Dimension.matchParent else Dimension.wrapContent
             }
-            visibility =
-                if (isMiniplayerShow) {
-                    Visibility.Visible
-                } else {
-                    Visibility.Gone
-                }
+            height = if (isMiniplayerShow) Dimension.wrapContent else Dimension.value(0.dp)
+            alpha = if (isMiniplayerShow) 1f else 0f
         }
     }

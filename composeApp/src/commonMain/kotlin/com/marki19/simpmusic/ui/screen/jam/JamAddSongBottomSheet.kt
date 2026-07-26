@@ -23,6 +23,7 @@ import com.maxrave.simpmusic.viewModel.SearchScreenUIState
 import com.maxrave.simpmusic.viewModel.SearchViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.search
@@ -38,6 +39,7 @@ fun JamAddSongBottomSheet(
     sharedViewModel: SharedViewModel = koinViewModel()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
     
     val recentlyItems = recentlySongsViewModel.recentlySongs.collectAsLazyPagingItems()
@@ -85,8 +87,11 @@ fun JamAddSongBottomSheet(
                                     modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
                                     isPlaying = false,
                                     onClickListener = {
-                                        jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                        onDismissRequest()
+                                        scope.launch {
+                                            sheetState.hide()
+                                            jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
+                                            onDismissRequest()
+                                        }
                                     },
                                     onAddToQueue = {
                                         jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
@@ -112,8 +117,11 @@ fun JamAddSongBottomSheet(
                                 modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
                                 isPlaying = false,
                                 onClickListener = {
-                                    jamViewModel.playNow(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
-                                    onDismissRequest()
+                                    scope.launch {
+                                        sheetState.hide()
+                                        jamViewModel.playNow(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
+                                        onDismissRequest()
+                                    }
                                 },
                                 onAddToQueue = {
                                     jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)

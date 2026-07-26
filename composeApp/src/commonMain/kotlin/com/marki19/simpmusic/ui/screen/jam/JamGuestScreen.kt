@@ -40,8 +40,19 @@ fun JamGuestScreen(
         }
         
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { 
+                viewModel.cancelConnection()
+                onBack()
+            },
             confirmButton = { },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.cancelConnection()
+                    onBack()
+                }) {
+                    Text("Cancel")
+                }
+            },
             title = { Text("Joining Jam") },
             text = {
                 Column(
@@ -69,7 +80,10 @@ fun JamGuestScreen(
             TopAppBar(
                 title = { Text("Join a Jam") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { 
+                        viewModel.cancelConnection()
+                        onBack() 
+                    }) {
                         Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -114,8 +128,10 @@ fun JamGuestScreen(
             Spacer(modifier = Modifier.height(16.dp))
             
             OutlinedButton(
-                onClick = onBack,
-                enabled = !isConnecting,
+                onClick = {
+                    viewModel.cancelConnection()
+                    onBack()
+                },
                 modifier = Modifier.fillMaxWidth(0.8f).height(50.dp)
             ) {
                 Text("Cancel")
