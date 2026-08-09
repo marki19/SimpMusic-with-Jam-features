@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.ui.icon.History
 import androidx.navigation.NavController
 import com.maxrave.simpmusic.extension.NonLazyGrid
 import com.maxrave.simpmusic.ui.icon.Downloading
@@ -178,7 +179,7 @@ data class LibraryTilingState(
             LibraryTilingState(
                 title = Res.string.cached_songs,
                 containerColor = Color(0xffdcd3ff),
-                icon = Icons.Default.Cached,
+                icon = SimpIcons.History,
                 iconColor = Color.Black,
             )
     }

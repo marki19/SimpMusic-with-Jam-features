@@ -3,16 +3,13 @@ package com.marki19.simpmusic.ui.screen.jam
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.background
-import androidx.compose.material.icons.rounded.PlaylistAdd
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.Search
+import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.marki19.simpmusic.viewModel.jam.JamViewModel
 import com.maxrave.domain.data.entities.SongEntity
@@ -64,7 +61,7 @@ fun JamAddSongBottomSheet(
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text(stringResource(Res.string.search)) },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "Search") },
+                leadingIcon = { Icon(SimpIcons.Search, contentDescription = "Search") },
                 singleLine = true,
                 shape = MaterialTheme.shapes.large
             )

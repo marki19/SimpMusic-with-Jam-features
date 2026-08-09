@@ -11,6 +11,7 @@ import com.marki19.domain.jam.JamSessionState
 import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.SongRepository
+import com.maxrave.domain.mediaservice.handler.PlayerEvent
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

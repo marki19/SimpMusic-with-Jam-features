@@ -2,8 +2,8 @@ package com.marki19.simpmusic.ui.screen.jam
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,7 +76,7 @@ fun JamHostScreen(
                         viewModel.cancelConnection()
                         onBack()
                     }) {
-                        Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = SimpIcons.ArrowBackIosNew, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)

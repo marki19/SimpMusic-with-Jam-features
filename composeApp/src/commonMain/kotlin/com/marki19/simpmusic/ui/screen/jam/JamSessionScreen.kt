@@ -15,8 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
+import com.maxrave.simpmusic.ui.icon.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -261,7 +260,7 @@ fun JamSessionScreen(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
-                                        Icons.Rounded.Devices,
+                                        SimpIcons.Sensors,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(14.dp)
@@ -357,7 +356,7 @@ fun JamSessionScreen(
                                 )
                             ) {
                                 Icon(
-                                    Icons.Rounded.AutoAwesome,
+                                    SimpIcons.Add,
                                     contentDescription = null,
                                     tint = Color.Black,
                                     modifier = Modifier.size(16.dp)
@@ -487,7 +486,7 @@ fun JamSessionScreen(
                                         contentAlignment = Alignment.CenterEnd,
                                     ) {
                                         Icon(
-                                            Icons.Rounded.Delete,
+                                            SimpIcons.Delete,
                                             contentDescription = "Remove",
                                             tint = MaterialTheme.colorScheme.onErrorContainer,
                                         )
@@ -523,7 +522,7 @@ fun JamSessionScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    Icons.Rounded.AutoAwesome,
+                                    SimpIcons.Add,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp),
@@ -538,10 +537,10 @@ fun JamSessionScreen(
                             if (isHost) {
                                 Row {
                                     IconButton(onClick = { viewModel.refreshRecommendations() }) {
-                                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
+                                        Icon(SimpIcons.Sync, contentDescription = "Refresh")
                                     }
                                     IconButton(onClick = { viewModel.toggleRecommendations(false) }) {
-                                        Icon(Icons.Rounded.Close, contentDescription = "Disable")
+                                        Icon(SimpIcons.Close, contentDescription = "Disable")
                                     }
                                 }
                             }
@@ -579,7 +578,7 @@ fun JamSessionScreen(
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            Icons.Rounded.PlaylistAdd,
+                                            SimpIcons.PlaylistAdd,
                                             contentDescription = "Add to Queue",
                                             tint = MaterialTheme.colorScheme.primary,
                                         )
@@ -636,7 +635,7 @@ fun JamSessionScreen(
                                 showChatSheet = false
                                 viewModel.setChatSheetOpen(false)
                             }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Close")
+                                Icon(SimpIcons.Close, contentDescription = "Close")
                             }
                         }
                         LazyColumn(
@@ -694,7 +693,7 @@ fun JamSessionScreen(
                                     textInput = ""
                                 },
                             ) {
-                                Icon(Icons.Rounded.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+                                Icon(SimpIcons.OpenInNew, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -798,7 +797,7 @@ private fun JamTopBar(
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(
-                    Icons.Rounded.ExpandMore,
+                    SimpIcons.KeyboardArrowDown,
                     contentDescription = "Minimize Jam",
                     modifier = Modifier.size(28.dp)
                 )
@@ -821,7 +820,7 @@ private fun JamTopBar(
                         }
                     }
                 ) {
-                    Icon(Icons.Rounded.Chat, contentDescription = "Chat")
+                    Icon(SimpIcons.Subtitles, contentDescription = "Chat")
                 }
             }
         },
@@ -883,7 +882,7 @@ private fun NowPlayingRow(
         Box {
             IconButton(onClick = onToggleMenu) {
                 Icon(
-                    Icons.Rounded.MoreVert,
+                    SimpIcons.MoreVert,
                     contentDescription = "Track options",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -899,7 +898,7 @@ private fun NowPlayingRow(
                         onRemoveFromQueue()
                     },
                     leadingIcon = {
-                        Icon(Icons.Rounded.Delete, contentDescription = null)
+                        Icon(SimpIcons.Delete, contentDescription = null)
                     }
                 )
             }
@@ -970,7 +969,7 @@ private fun QueueRowItem(
             // Far Right: Dedicated Always-Visible Drag Handle (☰)
             if (canDrag) {
                 Icon(
-                    Icons.Rounded.Menu,
+                    SimpIcons.DragHandle,
                     contentDescription = "Reorder",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier
@@ -1161,7 +1160,7 @@ private fun JamBottomPlaybackControlBar(
                 // 1. Shuffle (Crossed arrows)
                 IconButton(onClick = onToggleShuffle, enabled = canControl) {
                     Icon(
-                        Icons.Rounded.Shuffle,
+                        SimpIcons.Shuffle,
                         contentDescription = "Shuffle",
                         tint = if (shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
@@ -1170,7 +1169,7 @@ private fun JamBottomPlaybackControlBar(
                 // 2. Previous track
                 IconButton(onClick = onPrevious, enabled = canControl) {
                     Icon(
-                        Icons.Rounded.SkipPrevious,
+                        SimpIcons.SkipPrevious,
                         contentDescription = "Previous",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(28.dp)
@@ -1188,7 +1187,7 @@ private fun JamBottomPlaybackControlBar(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            if (isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = Color.Black,
                             modifier = Modifier.size(30.dp)
@@ -1199,7 +1198,7 @@ private fun JamBottomPlaybackControlBar(
                 // 4. Next track
                 IconButton(onClick = onNext, enabled = canControl) {
                     Icon(
-                        Icons.Rounded.SkipNext,
+                        SimpIcons.SkipNext,
                         contentDescription = "Next",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(28.dp)
@@ -1209,7 +1208,7 @@ private fun JamBottomPlaybackControlBar(
                 // 5. Repeat/loop
                 IconButton(onClick = onCycleRepeat, enabled = canControl) {
                     Icon(
-                        if (repeat == JamRepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                        if (repeat == JamRepeatMode.ONE) SimpIcons.RepeatOne else SimpIcons.Repeat,
                         contentDescription = "Repeat",
                         tint = if (repeat != JamRepeatMode.OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
@@ -1389,7 +1388,7 @@ private fun NowPlayingEmptyRow() {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Rounded.Podcasts,
+                imageVector = SimpIcons.Sensors,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

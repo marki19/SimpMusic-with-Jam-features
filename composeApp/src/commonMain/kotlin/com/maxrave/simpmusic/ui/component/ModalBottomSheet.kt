@@ -191,7 +191,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.baseline_people_alt_24
 import simpmusic.composeapp.generated.resources.add_to_a_playlist
 import simpmusic.composeapp.generated.resources.add_to_queue
 import simpmusic.composeapp.generated.resources.album
@@ -1840,7 +1839,7 @@ fun NowPlayingBottomSheet(
                     }
                     if (jamSessionState != null) {
                         ActionButton(
-                            icon = painterResource(Res.drawable.baseline_queue_music_24),
+                            icon = SimpIcons.QueueMusic,
                             text = null,
                             textString = "Add to Jam Queue"
                         ) {
@@ -1858,13 +1857,13 @@ fun NowPlayingBottomSheet(
                         }
                     } else {
                         ActionButton(
-                            icon = painterResource(Res.drawable.baseline_queue_music_24),
+                            icon = SimpIcons.QueueMusic,
                             text = Res.string.add_to_queue,
                         ) {
                             viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
                         }
                         ActionButton(
-                            icon = painterResource(Res.drawable.baseline_people_alt_24),
+                            icon = SimpIcons.PeopleAlt,
                             text = null,
                             textString = "Start a Jam"
                         ) {
@@ -2938,7 +2937,7 @@ fun PlaylistBottomSheet(
                 
                 if (onStartJam != null) {
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_people_alt_24),
+                        icon = SimpIcons.PeopleAlt,
                         text = null,
                         textString = "Start a Jam",
                     ) {
@@ -2949,7 +2948,7 @@ fun PlaylistBottomSheet(
                 
                 if (jamSessionState != null && onAddToJamQueue != null) {
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_queue_music_24),
+                        icon = SimpIcons.QueueMusic,
                         text = null,
                         textString = "Add to Jam Queue"
                     ) {

@@ -170,6 +170,9 @@ import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.QueueMusic
 import com.maxrave.simpmusic.ui.icon.Replay5
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.Sensors
+import com.maxrave.simpmusic.ui.icon.SkipPrevious
+import com.maxrave.simpmusic.ui.icon.SkipNext
 import com.maxrave.simpmusic.ui.icon.Subtitles
 import com.maxrave.simpmusic.ui.icon.SubtitlesOff
 import com.maxrave.simpmusic.ui.icon.ThumbsUpDown
@@ -1688,7 +1691,7 @@ fun NowPlayingScreenContent(
                              }
                                     ) {
                                             Icon(
-                                                imageVector = Icons.Rounded.Podcasts,
+                                                imageVector = SimpIcons.Sensors,
                                                 contentDescription = "Jam Session",
                                                 tint = jamIconTint
                                             )
@@ -2270,7 +2273,7 @@ fun NowPlayingScreenContent(
                                          }
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Rounded.Podcasts,
+                                                        imageVector = SimpIcons.Sensors,
                                                         contentDescription = "Jam Session",
                                                         tint = jamIconTint
                                                     )
@@ -2758,7 +2761,7 @@ fun NowPlayingScreenContent(
                             }
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Podcasts,
+                                imageVector = SimpIcons.Sensors,
                                 contentDescription = "Jam Session",
                                 tint = jamIconTint
                             )

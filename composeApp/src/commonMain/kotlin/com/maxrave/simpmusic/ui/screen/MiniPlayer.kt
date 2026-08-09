@@ -34,6 +34,23 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -85,6 +102,7 @@ import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.ui.icon.Sensors
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.toggleMiniPlayer
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
@@ -539,7 +557,7 @@ fun MiniPlayer(
                                 }
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Podcasts,
+                                imageVector = SimpIcons.Sensors,
                                 contentDescription = "Jam Session",
                                 tint = if (isJamActive) Color(0xFF87CEEB) else textColor,
                                 modifier = Modifier.size(24.dp)

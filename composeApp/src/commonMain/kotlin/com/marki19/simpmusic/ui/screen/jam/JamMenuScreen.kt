@@ -1,10 +1,10 @@
 package com.marki19.simpmusic.ui.screen.jam
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.Podcasts
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.PeopleAlt
+import com.maxrave.simpmusic.ui.icon.Sensors
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +31,7 @@ fun JamMenuScreen(
                 title = { Text("Jam Session") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = SimpIcons.ArrowBackIosNew, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -48,7 +48,7 @@ fun JamMenuScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = Icons.Rounded.Podcasts,
+                imageVector = SimpIcons.Sensors,
                 contentDescription = "Jam",
                 modifier = Modifier.size(100.dp),
                 tint = MaterialTheme.colorScheme.primary
@@ -88,7 +88,7 @@ fun JamMenuScreen(
                 ),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
-                Icon(Icons.Rounded.Podcasts, contentDescription = null, tint = Color.Black)
+                Icon(SimpIcons.Sensors, contentDescription = null, tint = Color.Black)
                 Spacer(Modifier.width(12.dp))
                 Text("Host a Jam", style = MaterialTheme.typography.titleMedium, color = Color.Black)
             }
@@ -103,7 +103,7 @@ fun JamMenuScreen(
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
-                Icon(Icons.Rounded.Groups, contentDescription = null)
+                Icon(SimpIcons.PeopleAlt, contentDescription = null)
                 Spacer(Modifier.width(12.dp))
                 Text("Join a Jam", style = MaterialTheme.typography.titleMedium)
             }

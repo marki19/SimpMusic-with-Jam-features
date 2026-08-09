@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import com.maxrave.simpmusic.ui.icon.CloudOff
 import com.maxrave.simpmusic.ui.icon.Download
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.Download
+import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -37,7 +39,6 @@ import simpmusic.composeapp.generated.resources.listen_to_downloaded
 import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.cached_songs
-import androidx.compose.material.icons.filled.Cached
 
 /**
  * Spotify-style minimal offline / error state shown on the Home tab when
@@ -111,7 +112,7 @@ fun OfflineErrorState(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Outlined.Download,
+                            SimpIcons.Download,
                             contentDescription = null,
                             modifier = Modifier.padding(10.dp).size(30.dp),
                             tint = Color.Black
@@ -137,7 +138,7 @@ fun OfflineErrorState(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            androidx.compose.material.icons.Icons.Default.Cached,
+                            SimpIcons.History,
                             contentDescription = null,
                             modifier = Modifier.padding(10.dp).size(30.dp),
                             tint = Color.Black
