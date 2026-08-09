@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -28,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.ui.icon.CloudOff
+import com.maxrave.simpmusic.ui.icon.Download
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -72,7 +72,7 @@ fun OfflineErrorState(
                 .padding(horizontal = 24.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.CloudOff,
+                imageVector = SimpIcons.CloudOff,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 modifier = Modifier.size(80.dp),
@@ -164,6 +164,26 @@ fun OfflineErrorState(
                 Text(
                     text = stringResource(Res.string.retry),
                     color = MaterialTheme.colorScheme.background,
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            TextButton(
+                onClick = onOpenDownloaded,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                ),
+            ) {
+                Icon(
+                    imageVector = SimpIcons.Download,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(Res.string.listen_to_downloaded),
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
             }
         }
