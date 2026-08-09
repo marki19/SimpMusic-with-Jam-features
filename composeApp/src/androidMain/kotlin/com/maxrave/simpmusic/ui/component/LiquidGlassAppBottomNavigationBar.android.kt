@@ -1,6 +1,7 @@
     package com.maxrave.simpmusic.ui.component
 
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -112,10 +113,8 @@ actual fun LiquidGlassAppBottomNavigationBar(
     }
 
     val nowPlayingData by viewModel.nowPlayingState.collectAsStateWithLifecycle()
-    // MiniPlayer visibility logic
-    var isShowMiniPlayer by rememberSaveable {
-        mutableStateOf(true)
-    }
+    // MiniPlayer visibility logic derived directly from current nowPlayingData
+    val isShowMiniPlayer = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
 
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val bottomNavScreens =
@@ -148,10 +147,6 @@ actual fun LiquidGlassAppBottomNavigationBar(
         mutableStateOf(false)
     }
 
-    LaunchedEffect(nowPlayingData) {
-        isShowMiniPlayer = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
-    }
-
     LaunchedEffect(currentBackStackEntry) {
         currentBackStackEntry?.destination?.let { current ->
             Logger.d(TAG, "LiquidGlassAppBottomNavigationBar: current route: ${current.route}")
@@ -163,8 +158,8 @@ actual fun LiquidGlassAppBottomNavigationBar(
         isExpanded = !isInSearchDestination
     }
 
-    val constraintSet = remember(isShowMiniPlayer, isExpanded) {
-        decoupledConstraints(isShowMiniPlayer, isExpanded)
+    val constraintSet = remember(isExpanded) {
+        decoupledConstraints(isExpanded)
     }
 
     LaunchedEffect(isScrolledToTop) {
@@ -268,26 +263,29 @@ actual fun LiquidGlassAppBottomNavigationBar(
                 }
             }
         }
-        MiniPlayer(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .height(56.dp)
-                .layoutId("miniPlayer"),
-            backdrop = backdrop,
-            onClick = {
-                onOpenNowPlaying()
-            },
-            onClose = {
-                viewModel.stopPlayer()
-                viewModel.isServiceRunning = false
-            },
-        )
+        AnimatedVisibility(
+            visible = isShowMiniPlayer,
+            modifier = Modifier.layoutId("miniPlayer")
+        ) {
+            MiniPlayer(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .height(56.dp),
+                backdrop = backdrop,
+                onClick = {
+                    onOpenNowPlaying()
+                },
+                onClose = {
+                    viewModel.stopPlayer()
+                    viewModel.isServiceRunning = false
+                },
+            )
+        }
     }
 }
 
 private fun decoupledConstraints(
-    isMiniplayerShow: Boolean = true,
     isExpanded: Boolean,
 ): ConstraintSet =
     ConstraintSet {
@@ -310,14 +308,13 @@ private fun decoupledConstraints(
                 end.linkTo(parent.end)
                 top.linkTo(toolbar.top)
                 bottom.linkTo(toolbar.bottom)
-                width = if (isMiniplayerShow) Dimension.fillToConstraints else Dimension.wrapContent
+                width = Dimension.fillToConstraints
             } else {
                 start.linkTo(parent.start)
                 end.linkTo(parent.end)
                 bottom.linkTo(toolbar.top, margin = 12.dp)
-                width = if (isMiniplayerShow) Dimension.matchParent else Dimension.wrapContent
+                width = Dimension.matchParent
             }
-            height = if (isMiniplayerShow) Dimension.wrapContent else Dimension.value(0.dp)
-            alpha = if (isMiniplayerShow) 1f else 0f
+            height = Dimension.wrapContent
         }
     }

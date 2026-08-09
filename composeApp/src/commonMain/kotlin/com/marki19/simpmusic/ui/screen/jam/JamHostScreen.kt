@@ -1,5 +1,6 @@
 package com.marki19.simpmusic.ui.screen.jam
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -7,10 +8,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.marki19.simpmusic.viewModel.jam.JamViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,35 +27,35 @@ fun JamHostScreen(
     onBack: () -> Unit
 ) {
     val sessionState by viewModel.sessionState.collectAsState()
-    val isConnecting by viewModel.isConnecting.collectAsState()
+    val context = LocalContext.current
 
     // Immediately trigger session creation upon launching Host screen
     LaunchedEffect(Unit) {
-        if (sessionState == null && !isConnecting) {
-            viewModel.createSession(
-                initialVideoId = initialVideoId,
-                initialTitle = initialTitle,
-                initialArtist = initialArtist,
-                initialThumbnailUrl = initialThumbnailUrl,
-                initialDurationMs = initialDurationMs
-            )
-        } else if (sessionState != null && !isConnecting) {
+        if (sessionState != null) {
             // We are already in a session, but want to host a new one. Tear down first.
             viewModel.leaveSessionAndWait()
-            viewModel.createSession(
-                initialVideoId = initialVideoId,
-                initialTitle = initialTitle,
-                initialArtist = initialArtist,
-                initialThumbnailUrl = initialThumbnailUrl,
-                initialDurationMs = initialDurationMs
-            )
         }
+        viewModel.createSession(
+            initialVideoId = initialVideoId,
+            initialTitle = initialTitle,
+            initialArtist = initialArtist,
+            initialThumbnailUrl = initialThumbnailUrl,
+            initialDurationMs = initialDurationMs
+        )
     }
 
     // Automatically navigate to Jam session screen as soon as session is ready
     LaunchedEffect(sessionState) {
         if (sessionState != null && sessionState!!.isHost) {
             onNavigateToSession()
+        }
+    }
+
+    // Navigate back with an error toast if the connection times out or fails
+    LaunchedEffect(Unit) {
+        viewModel.connectionError.collectLatest { errorMsg ->
+            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+            onBack()
         }
     }
 
@@ -70,9 +72,9 @@ fun JamHostScreen(
             TopAppBar(
                 title = { Text("Hosting Jam") },
                 navigationIcon = {
-                    IconButton(onClick = { 
-                        viewModel.cancelConnection() // FIX: Reset state
-                        onBack() 
+                    IconButton(onClick = {
+                        viewModel.cancelConnection()
+                        onBack()
                     }) {
                         Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
@@ -115,7 +117,7 @@ fun JamHostScreen(
                 Spacer(modifier = Modifier.height(32.dp))
                 OutlinedButton(
                     onClick = {
-                        viewModel.cancelConnection() // FIX: Reset state
+                        viewModel.cancelConnection()
                         onBack()
                     },
                     modifier = Modifier.width(160.dp).height(44.dp)

@@ -19,10 +19,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.Crossfade
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -108,11 +113,10 @@ fun JamSessionScreen(
     val nowPlayingId = session.playbackState.currentSongId?.substringAfterLast('/')
         ?: mediaPlayerHandler.nowPlayingState.value?.track?.videoId?.substringAfterLast('/')
 
-    val currentIdx = fullQueue.indexOfFirst { it.videoId.substringAfterLast('/') == nowPlayingId }
-    val upcomingQueue = when {
-        currentIdx >= 0 -> fullQueue.drop(currentIdx + 1)
-        nowPlayingId != null -> fullQueue.filter { it.videoId.substringAfterLast('/') != nowPlayingId }
-        else -> fullQueue
+    val upcomingQueue = if (!nowPlayingId.isNullOrBlank()) {
+        fullQueue.filter { it.videoId.cleanId() != nowPlayingId.cleanId() }
+    } else {
+        fullQueue
     }
 
     val manualQueue = upcomingQueue.filter { !it.isRecommendation }
@@ -146,14 +150,23 @@ fun JamSessionScreen(
             )
         },
         bottomBar = {
+            val localControlState by mediaPlayerHandler.controlState.collectAsStateWithLifecycle()
+            val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
+            val isLocallyPlaying = localControlState.isPlaying || mediaPlayerHandler.player.playWhenReady
+            val effectiveIsPlaying = if (isHost) isLocallyPlaying else session.playbackState.isPlaying
+            val canSeek = isHost || perms.allowSeek
+
             JamBottomPlaybackControlBar(
-                isPlaying = session.playbackState.isPlaying,
+                isPlaying = effectiveIsPlaying,
                 shuffle = session.playbackState.shuffle,
                 repeat = session.playbackState.repeatMode,
                 canControl = isHost || perms.allowPause,
+                canSeek = canSeek,
+                timeline = timelineState,
+                onSeekTo = viewModel::seekTo,
                 onTogglePlayPause = {
                     if (isHost || perms.allowPause) {
-                        if (session.playbackState.isPlaying) viewModel.pause() else viewModel.play()
+                        if (effectiveIsPlaying) viewModel.pause() else viewModel.play()
                     }
                 },
                 onToggleShuffle = { viewModel.setShuffle(!session.playbackState.shuffle) },
@@ -233,7 +246,10 @@ fun JamSessionScreen(
                                 }
                             }
 
-                            // Accent colored chip
+                            // Accent colored chip with live participant count
+                            val listenerCount = session.participants.size.coerceAtLeast(1)
+                            val listenerCountText = if (listenerCount == 1) "1 listening" else "$listenerCount listening"
+
                             Surface(
                                 shape = RoundedCornerShape(50),
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
@@ -251,7 +267,7 @@ fun JamSessionScreen(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
-                                        text = sessionChipText,
+                                        text = "$sessionChipText • $listenerCountText",
                                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                                         color = MaterialTheme.colorScheme.primary,
                                     )
@@ -296,12 +312,13 @@ fun JamSessionScreen(
                             contentPadding = PaddingValues(horizontal = 22.dp, vertical = 4.dp),
                             modifier = Modifier.height(34.dp),
                             shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
                         ) {
                             Text(
                                 if (isHost) "End Jam" else "Leave",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.error
                             )
                         }
                     }
@@ -363,20 +380,36 @@ fun JamSessionScreen(
                     }
                     val initialTrack = viewModel.initialTrack
                     val handlerTrack = mediaPlayerHandler.nowPlayingState.value?.track
+                    val handlerMediaItem = mediaPlayerHandler.nowPlayingState.value?.mediaItem?.takeIf { it.mediaId.isNotBlank() }
+                        ?: mediaPlayerHandler.nowPlaying.value
 
                     val resolvedTitle = currentItem?.title?.ifBlank { null }
                         ?: initialTrack?.title?.ifBlank { null }
                         ?: handlerTrack?.title?.ifBlank { null }
+                        ?: nowPlayingState?.songEntity?.title?.ifBlank { null }
+                        ?: nowPlayingState?.mediaItem?.metadata?.title?.toString()?.ifBlank { null }
+                        ?: handlerMediaItem?.metadata?.title?.toString()?.ifBlank { null }
+                        ?: if (!currentSongId.isNullOrBlank()) "Playing Track" else null
+
                     val resolvedArtist = currentItem?.artist?.ifBlank { null }
                         ?: initialTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
                         ?: handlerTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
-                    val resolvedArtwork = currentItem?.thumbnailUrl?.ifBlank { null }
-                        ?: initialTrack?.thumbnails?.lastOrNull()?.url
-                        ?: handlerTrack?.thumbnails?.lastOrNull()?.url
+                        ?: nowPlayingState?.songEntity?.artistName?.joinToString(", ")?.ifBlank { null }
+                        ?: nowPlayingState?.mediaItem?.metadata?.artist?.toString()?.ifBlank { null }
+                        ?: handlerMediaItem?.metadata?.artist?.toString()?.ifBlank { null }
+
+                    val resolvedArtwork: String? = currentItem?.thumbnailUrl?.ifBlank { null }
+                        ?: initialTrack?.thumbnails?.lastOrNull()?.url?.ifBlank { null }
+                        ?: handlerTrack?.thumbnails?.lastOrNull()?.url?.ifBlank { null }
+                        ?: nowPlayingState?.songEntity?.thumbnails?.ifBlank { null }
+                        ?: nowPlayingState?.mediaItem?.metadata?.artworkUri?.toString()?.ifBlank { null }
+                        ?: handlerMediaItem?.metadata?.artworkUri?.toString()?.ifBlank { null }
 
                     LaunchedEffect(currentItem?.videoId) {
                         if (currentItem != null) viewModel.clearInitialTrack()
                     }
+
+                    val isRoomEmpty = session.playbackState.currentSongId.isNullOrBlank() && session.playbackState.queue.isEmpty()
 
                     if (resolvedTitle != null) {
                         NowPlayingRow(
@@ -393,7 +426,7 @@ fun JamSessionScreen(
                                 }
                             }
                         )
-                    } else if (session.playbackState.currentSongId.isNullOrBlank() && session.playbackState.queue.isEmpty()) {
+                    } else if (isRoomEmpty) {
                         NowPlayingEmptyRow()
                     } else {
                         NowPlayingSkeletonRow()
@@ -516,9 +549,11 @@ fun JamSessionScreen(
                     }
 
                     items(recommendations, key = { it.queueId }) { item ->
+                        var isItemAdded by remember(item.queueId) { mutableStateOf(false) }
                         val dismissState = rememberSwipeToDismissBoxState(
                             confirmValueChange = { value ->
-                                if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                if (value == SwipeToDismissBoxValue.StartToEnd && !isItemAdded) {
+                                    isItemAdded = true
                                     viewModel.addToQueue(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
                                     sharedViewModel.makeToast("Added ${item.title} to queue")
                                 }
@@ -596,7 +631,7 @@ fun JamSessionScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text("Room Chat", style = MaterialTheme.typography.headlineSmall)
+                            Text("Session Chat", style = MaterialTheme.typography.titleLarge)
                             IconButton(onClick = {
                                 showChatSheet = false
                                 viewModel.setChatSheetOpen(false)
@@ -609,69 +644,26 @@ fun JamSessionScreen(
                             reverseLayout = true,
                         ) {
                             items(chatMessages.reversed()) { msg ->
-                                val myUserId = viewModel.localUserId
-                                val isMe = (myUserId != null && msg.senderId == myUserId) ||
-                                           (session.isHost && msg.senderId == session.hostId)
-                                val senderParticipant = session.participants.find { it.userId == msg.senderId }
-                                val senderName = senderParticipant?.name ?: msg.senderId
-                                val senderImage = senderParticipant?.imageUrl ?: ""
-
+                                val isMe = msg.senderId == viewModel.localUserId
+                                val senderName = session.participants.find { it.userId == msg.senderId }?.name?.ifBlank { null }
+                                    ?: if (isMe) "You" else "Participant"
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
-                                    verticalAlignment = Alignment.Bottom,
                                 ) {
-                                    if (!isMe) {
-                                        Box {
-                                            if (senderImage.isNotBlank()) {
-                                                AsyncImage(
-                                                    model = senderImage,
-                                                    contentDescription = "Profile",
-                                                    modifier = Modifier
-                                                        .size(32.dp)
-                                                        .clip(CircleShape),
-                                                    contentScale = ContentScale.Crop,
-                                                )
-                                            } else {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(32.dp)
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.primaryContainer),
-                                                    contentAlignment = Alignment.Center,
-                                                ) {
-                                                    Text(
-                                                        senderName.take(2).uppercase(),
-                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
                                     Column(
                                         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
                                         modifier = Modifier.widthIn(max = 280.dp)
                                     ) {
                                         Text(
-                                            text = if (isMe) "You" else senderName,
+                                            senderName,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
+                                        Spacer(modifier = Modifier.height(2.dp))
                                         Surface(
-                                            shape = RoundedCornerShape(
-                                                topStart = 16.dp,
-                                                topEnd = 16.dp,
-                                                bottomStart = if (isMe) 16.dp else 4.dp,
-                                                bottomEnd = if (isMe) 4.dp else 16.dp
-                                            ),
+                                            shape = RoundedCornerShape(16.dp),
                                             color = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                            contentColor = if (isMe) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            tonalElevation = 2.dp,
                                         ) {
                                             Text(
                                                 text = msg.text,
@@ -709,7 +701,6 @@ fun JamSessionScreen(
                 }
             }
         }
-    }
 
     // Settings sheet
     if (showSettingsSheet) {
@@ -745,16 +736,9 @@ fun JamSessionScreen(
                         viewModel.leaveSession()
                         onBack()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = Color.White
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(
-                        if (session.isHost) "End Jam" else "Leave",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(if (session.isHost) "End Session" else "Leave")
                 }
             },
             dismissButton = {
@@ -772,7 +756,8 @@ fun JamSessionScreen(
             jamViewModel = viewModel,
         )
     }
-}
+} // Closes Scaffold body
+} // Closes JamSessionScreen
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Top App Bar
@@ -1007,6 +992,9 @@ private fun JamBottomPlaybackControlBar(
     shuffle: Boolean,
     repeat: JamRepeatMode,
     canControl: Boolean,
+    canSeek: Boolean,
+    timeline: com.maxrave.domain.data.model.streams.TimeLine,
+    onSeekTo: (Long) -> Unit,
     onTogglePlayPause: () -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
@@ -1018,22 +1006,158 @@ private fun JamBottomPlaybackControlBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(32.dp),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
             tonalElevation = 8.dp,
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val currentMs = timeline.current.coerceAtLeast(0L)
+                val totalMs = timeline.total.coerceAtLeast(0L)
+                var isScrubbing by remember { mutableStateOf(false) }
+                var sliderValue by remember { mutableFloatStateOf(0f) }
+
+                LaunchedEffect(key1 = timeline.current, key2 = timeline.total, key3 = isScrubbing) {
+                    if (!isScrubbing) {
+                        sliderValue = if (totalMs > 0L) {
+                            (currentMs.toFloat() * 100f / totalMs.toFloat()).coerceIn(0f, 100f)
+                        } else {
+                            0f
+                        }
+                    }
+                }
+
+                val displayPos = if (isScrubbing) {
+                    ((sliderValue / 100f) * totalMs.toFloat()).toLong().coerceAtLeast(0L)
+                } else {
+                    currentMs
+                }
+
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Crossfade(targetState = timeline.loading || totalMs <= 0L) { isLoading ->
+                            if (isLoading) {
+                                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .padding(horizontal = 3.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                        strokeCap = StrokeCap.Round,
+                                    )
+                                }
+                            } else {
+                                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                                    LinearProgressIndicator(
+                                        progress = { (timeline.bufferedPercent.toFloat() / 100f).coerceIn(0f, 1f) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .padding(horizontal = 3.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                        strokeCap = StrokeCap.Round,
+                                        drawStopIndicator = {},
+                                    )
+                                }
+                            }
+                        }
+                        if (totalMs > 0L) {
+                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                                Slider(
+                                    value = sliderValue,
+                                    valueRange = 0f..100f,
+                                    onValueChange = { newValue ->
+                                        isScrubbing = true
+                                        sliderValue = newValue
+                                    },
+                                    onValueChangeFinished = {
+                                        isScrubbing = false
+                                        if (canSeek && totalMs > 0L) {
+                                            val targetMs = ((sliderValue / 100f) * totalMs.toFloat()).toLong()
+                                            onSeekTo(targetMs)
+                                        }
+                                    },
+                                    enabled = canSeek,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    track = { sliderState ->
+                                        SliderDefaults.Track(
+                                            modifier = Modifier.height(5.dp),
+                                            enabled = canSeek,
+                                            sliderState = sliderState,
+                                            colors = SliderDefaults.colors().copy(
+                                                thumbColor = MaterialTheme.colorScheme.primary,
+                                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                                inactiveTrackColor = Color.Transparent,
+                                            ),
+                                            thumbTrackGapSize = 0.dp,
+                                            drawTick = { _, _ -> },
+                                            drawStopIndicator = null,
+                                        )
+                                    },
+                                    thumb = {
+                                        SliderDefaults.Thumb(
+                                            modifier = Modifier
+                                                .height(18.dp)
+                                                .width(8.dp)
+                                                .padding(vertical = 4.dp),
+                                            thumbSize = DpSize(8.dp, 8.dp),
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            colors = SliderDefaults.colors().copy(
+                                                thumbColor = MaterialTheme.colorScheme.primary,
+                                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                                inactiveTrackColor = Color.Transparent,
+                                            ),
+                                            enabled = canSeek,
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = formatJamDurationMs(displayPos),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatJamDurationMs(totalMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                 // 1. Shuffle (Crossed arrows)
                 IconButton(onClick = onToggleShuffle, enabled = canControl) {
                     Icon(
@@ -1092,7 +1216,17 @@ private fun JamBottomPlaybackControlBar(
                 }
             }
         }
+        }
     }
+}
+
+private fun formatJamDurationMs(ms: Long): String {
+    if (ms <= 0L) return "0:00"
+    val totalSec = ms / 1000L
+    val min = totalSec / 60
+    val sec = totalSec % 60
+    val secStr = if (sec < 10) "0$sec" else "$sec"
+    return "$min:$secStr"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

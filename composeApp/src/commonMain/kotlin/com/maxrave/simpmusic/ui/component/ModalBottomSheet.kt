@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import com.marki19.domain.jam.cleanId
 import com.maxrave.domain.utils.toTrack
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -941,13 +942,12 @@ fun QueueBottomSheet(
         derivedStateOf {
             val session = jamSession
             if (session != null) {
-                val currentSongId = session.playbackState.currentSongId?.substringAfterLast('/')
+                val currentSongId = session.playbackState.currentSongId?.cleanId()
                 val fullQueue = session.playbackState.queue
-                val currentIdx = fullQueue.indexOfFirst { it.videoId.substringAfterLast('/') == currentSongId }
-                val upcomingJamQueue = when {
-                    currentIdx >= 0 -> fullQueue.drop(currentIdx + 1)
-                    currentSongId != null -> fullQueue.filter { it.videoId.substringAfterLast('/') != currentSongId }
-                    else -> fullQueue
+                val upcomingJamQueue = if (!currentSongId.isNullOrBlank()) {
+                    fullQueue.filter { it.videoId.cleanId() != currentSongId }
+                } else {
+                    fullQueue
                 }
                 upcomingJamQueue.map { jamItem ->
                     com.maxrave.domain.data.model.browse.album.Track(

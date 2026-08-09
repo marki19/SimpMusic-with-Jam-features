@@ -309,6 +309,20 @@ wss.on("connection", (ws) => {
                     break;
                 }
 
+                // ── END_SESSION ─────────────────────────────────────────────
+                case "END_SESSION": {
+                    if (!currentRoomId) return;
+                    const session = sessions.get(currentRoomId);
+                    if (!session || session.hostId !== currentUserId) return;
+
+                    broadcast(currentRoomId, { type: "SESSION_ENDED" });
+                    session.users.forEach(u => {
+                        if (u.ws) u.ws.close();
+                    });
+                    sessions.delete(currentRoomId);
+                    break;
+                }
+
                 // ── SYNC_STATE ──────────────────────────────────────────────
                 case "SYNC_STATE": {
                     if (!currentRoomId) return;

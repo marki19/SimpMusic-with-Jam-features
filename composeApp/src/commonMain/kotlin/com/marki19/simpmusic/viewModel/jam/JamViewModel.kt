@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.Job
 import kotlin.time.Duration.Companion.minutes
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.utils.toTrack
@@ -51,6 +53,12 @@ class JamViewModel(
 
     private val _isConnecting = MutableStateFlow(false)
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+
+    /** Emits an error message when session creation/join times out or fails catastrophically. */
+    private val _connectionError = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val connectionError: kotlinx.coroutines.flow.SharedFlow<String> = _connectionError
+
+    private var sessionInitJob: Job? = null
 
     /** Non-null when we should show a host-transfer snackbar. */
     private val _hostTransferNotice = MutableStateFlow<String?>(null)
@@ -156,6 +164,13 @@ class JamViewModel(
         _hostTransferNotice.value = null
     }
 
+    /** Dispatches a command to the Jam session (Host or Guest). Safe to call from UI. */
+    fun sendCommand(command: JamCommand) {
+        viewModelScope.launch {
+            jamRepository.sendCommand(command)
+        }
+    }
+
     // ── Taste sharing ─────────────────────────────────────────────────────────
 
     private fun syncTaste(shuffle: Boolean = false) {
@@ -195,6 +210,7 @@ class JamViewModel(
     // ── Session lifecycle ─────────────────────────────────────────────────────
 
     fun cancelConnection() {
+        sessionInitJob?.cancel()
         _isConnecting.value = false
         viewModelScope.launch {
             jamRepository.leaveSession()
@@ -208,124 +224,148 @@ class JamViewModel(
         initialThumbnailUrl: String? = null,
         initialDurationMs: Long? = null
     ) {
-        viewModelScope.launch {
+        sessionInitJob?.cancel()
+        sessionInitJob = viewModelScope.launch {
             _isConnecting.value = true
             try {
-            val account = accountRepository.getUsedGoogleAccount().firstOrNull()
-            val dsName = dataStoreManager.getString("AccountName").firstOrNull()
-            val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
+                withTimeout(300_000L) {
+                    val account = accountRepository.getUsedGoogleAccount().firstOrNull()
+                    val dsName = dataStoreManager.getString("AccountName").firstOrNull()
+                    val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
 
-            val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
-            val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Host"
-            var rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
+                    val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
+                    val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Host"
+                    val rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
+                    val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
 
-            if (rawImageUrl.isBlank() && account?.netscapeCookie != null) {
-                val accountInfoList = accountRepository.getAccountInfo(account.netscapeCookie!!).firstOrNull()
-                rawImageUrl = accountInfoList?.firstOrNull()?.thumbnails?.lastOrNull()?.url ?: ""
-                if (rawImageUrl.isNotBlank()) {
-                    dataStoreManager.putString("AccountThumbUrl", rawImageUrl)
+                    _localUserId = userId
+                    jamRepository.createSession(userId, name, imageUrl)
+                    syncTaste()
+
+                    val activeTrack = mediaPlayerHandler.nowPlayingState.value.track
+                    val fallbackMediaItem = mediaPlayerHandler.nowPlayingState.value.mediaItem.takeIf { it.mediaId.isNotBlank() }
+                        ?: mediaPlayerHandler.nowPlaying.value
+
+                    val effectiveVideoId = initialVideoId?.ifBlank { null }
+                        ?: activeTrack?.videoId?.ifBlank { null }
+                        ?: fallbackMediaItem?.mediaId?.takeIf { it.isNotBlank() }
+
+                    val effectiveTitle = initialTitle?.ifBlank { null }
+                        ?: activeTrack?.title?.ifBlank { null }
+                        ?: fallbackMediaItem?.metadata?.title?.toString()?.ifBlank { null }
+                        ?: "Playing Track"
+
+                    val effectiveArtist = initialArtist?.ifBlank { null }
+                        ?: activeTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
+                        ?: fallbackMediaItem?.metadata?.artist?.toString()?.ifBlank { null }
+                        ?: "Unknown Artist"
+
+                    val effectiveThumbnailUrl = initialThumbnailUrl?.ifBlank { null }
+                        ?: activeTrack?.thumbnails?.lastOrNull()?.url?.ifBlank { null }
+                        ?: fallbackMediaItem?.metadata?.artworkUri?.toString()?.ifBlank { null }
+
+                    val effectiveDurationMs = initialDurationMs
+                        ?: ((activeTrack?.durationSeconds ?: 0) * 1000L)
+
+                    if (!effectiveVideoId.isNullOrBlank()) {
+                        _initialTrack = Track(
+                            album = null,
+                            artists = if (effectiveArtist.isNotBlank()) listOf(Artist(name = effectiveArtist, id = null)) else emptyList(),
+                            duration = "",
+                            durationSeconds = ((effectiveDurationMs ?: 0L) / 1000L).toInt(),
+                            isAvailable = true,
+                            isExplicit = false,
+                            likeStatus = null,
+                            thumbnails = if (!effectiveThumbnailUrl.isNullOrBlank()) listOf(Thumbnail(url = effectiveThumbnailUrl, width = 544, height = 544)) else emptyList(),
+                            title = effectiveTitle,
+                            videoId = effectiveVideoId,
+                            videoType = null,
+                            category = null,
+                            feedbackTokens = null,
+                            resultType = null,
+                            year = ""
+                        )
+                    } else {
+                        _initialTrack = activeTrack
+                    }
+
+                    if (effectiveVideoId != null) {
+                        jamRepository.sessionState.first { it != null }
+                        jamRepository.sendCommand(JamCommand.PlayNow(
+                            videoId = effectiveVideoId,
+                            title = effectiveTitle,
+                            artist = effectiveArtist,
+                            thumbnailUrl = effectiveThumbnailUrl,
+                            durationMs = effectiveDurationMs
+                        ))
+                        if (!mediaPlayerHandler.controlState.value.isPlaying) {
+                            mediaPlayerHandler.onPlayerEvent(PlayerEvent.PlayPause)
+                        }
+                    } else {
+                        jamRepository.sessionState.first { it != null }
+                    }
+                    _isConnecting.value = false
                 }
-            }
-
-            val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
-
-            _localUserId = userId
-            jamRepository.createSession(userId, name, imageUrl)
-            syncTaste()
-
-            val activeTrack = mediaPlayerHandler.nowPlayingState.value.track
-            val fallbackMediaItem = mediaPlayerHandler.nowPlaying.value
-
-            val effectiveVideoId = initialVideoId ?: activeTrack?.videoId ?: fallbackMediaItem?.mediaId
-            val effectiveTitle = initialTitle ?: activeTrack?.title ?: fallbackMediaItem?.metadata?.title?.toString()
-            val effectiveArtist = initialArtist ?: activeTrack?.artists?.firstOrNull()?.name ?: fallbackMediaItem?.metadata?.artist?.toString()
-            val effectiveThumbnailUrl = initialThumbnailUrl ?: activeTrack?.thumbnails?.lastOrNull()?.url ?: fallbackMediaItem?.metadata?.artworkUri?.toString()
-            val effectiveDurationMs = initialDurationMs ?: ((activeTrack?.durationSeconds ?: 0) * 1000L)
-
-            // Cache initial track from effective metadata so JamSessionScreen displays it instantly
-            if (!effectiveVideoId.isNullOrBlank()) {
-                _initialTrack = Track(
-                    album = null,
-                    artists = if (!effectiveArtist.isNullOrBlank()) listOf(Artist(name = effectiveArtist, id = null)) else emptyList(),
-                    duration = "",
-                    durationSeconds = ((effectiveDurationMs ?: 0L) / 1000L).toInt(),
-                    isAvailable = true,
-                    isExplicit = false,
-                    likeStatus = null,
-                    thumbnails = if (!effectiveThumbnailUrl.isNullOrBlank()) listOf(Thumbnail(url = effectiveThumbnailUrl, width = 544, height = 544)) else emptyList(),
-                    title = effectiveTitle ?: "",
-                    videoId = effectiveVideoId,
-                    videoType = null,
-                    category = null,
-                    feedbackTokens = null,
-                    resultType = null,
-                    year = ""
-                )
-            } else {
-                _initialTrack = activeTrack
-            }
-
-            if (effectiveVideoId != null) {
-                jamRepository.sessionState.first { it != null }
-                jamRepository.sendCommand(JamCommand.PlayNow(
-                    videoId = effectiveVideoId,
-                    title = effectiveTitle ?: "",
-                    artist = effectiveArtist ?: "",
-                    thumbnailUrl = effectiveThumbnailUrl,
-                    durationMs = effectiveDurationMs
-                ))
-            }
-            } catch (e: Exception) {
-                // FIX: Reset connection state if the server fails to wake up
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 _isConnecting.value = false
+                _connectionError.tryEmit("Server timed out. Please try again.")
+            } catch (e: Exception) {
+                _isConnecting.value = false
+                _connectionError.tryEmit("Connection failed: ${e.message ?: "Unknown error"}")
                 e.printStackTrace()
             }
         }
     }
 
     fun joinSession(roomId: String) {
-        viewModelScope.launch {
+        sessionInitJob?.cancel()
+        sessionInitJob = viewModelScope.launch {
             _isConnecting.value = true
             try {
-            val account = accountRepository.getUsedGoogleAccount().firstOrNull()
-            val dsName = dataStoreManager.getString("AccountName").firstOrNull()
-            val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
+                withTimeout(300_000L) {
+                    val account = accountRepository.getUsedGoogleAccount().firstOrNull()
+                    val dsName = dataStoreManager.getString("AccountName").firstOrNull()
+                    val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
 
-            val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
-            val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Guest"
-            var rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
-            
-            if (rawImageUrl.isBlank() && account?.netscapeCookie != null) {
-                val accountInfoList = accountRepository.getAccountInfo(account.netscapeCookie!!).firstOrNull()
-                rawImageUrl = accountInfoList?.firstOrNull()?.thumbnails?.lastOrNull()?.url ?: ""
-                if (rawImageUrl.isNotBlank()) {
-                    dataStoreManager.putString("AccountThumbUrl", rawImageUrl)
+                    val userId = account?.email?.takeIf { it.isNotBlank() } ?: "User-${(1000..9999).random()}"
+                    val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Guest"
+                    val rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
+                    val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
+
+                    _localUserId = userId
+                    jamRepository.joinSession(roomId, userId, name, imageUrl)
+                    syncTaste()
+
+                    jamRepository.sessionState.first { it != null }
+                    _isConnecting.value = false
                 }
-            }
-            
-            val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
-
-            _localUserId = userId
-            jamRepository.joinSession(roomId, userId, name, imageUrl)
-            syncTaste()
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _isConnecting.value = false
+                _connectionError.tryEmit("Server timed out. Please try again.")
             } catch (e: Exception) {
                 _isConnecting.value = false
+                _connectionError.tryEmit("Connection failed: ${e.message ?: "Unknown error"}")
                 e.printStackTrace()
             }
         }
     }
 
+
     fun leaveSession() {
+        sessionInitJob?.cancel()
+        _isConnecting.value = false
+        _initialTrack = null
         viewModelScope.launch {
             jamRepository.leaveSession()
-            _initialTrack = null
         }
     }
 
     suspend fun leaveSessionAndWait() {
+        sessionInitJob?.cancel()
+        _isConnecting.value = false
+        _initialTrack = null
         jamRepository.leaveSession()
         jamRepository.sessionState.first { it == null }
-        _initialTrack = null
     }
 
     fun clearInitialTrack() {
@@ -416,6 +456,10 @@ class JamViewModel(
 
     fun setRepeat(mode: JamRepeatMode) {
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.SetRepeat(mode)) }
+    }
+
+    fun seekTo(positionMs: Long) {
+        viewModelScope.launch { jamRepository.sendCommand(JamCommand.Seek(positionMs)) }
     }
 
     fun skipNext() {

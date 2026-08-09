@@ -564,10 +564,17 @@ fun MiniPlayer(
                                 }
                             } else {
                                 PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(36.dp), tint = textColor) {
-                                    sharedViewModel.onUIEvent(UIEvent.PlayPause)
+                                    if (isJamActive) {
+                                        // Route through Jam so guests are notified
+                                        val cmd = if (isPlaying) com.marki19.domain.jam.JamCommand.Pause else com.marki19.domain.jam.JamCommand.Play
+                                        coroutineScope.launch { jamViewModel.sendCommand(cmd) }
+                                    } else {
+                                        sharedViewModel.onUIEvent(UIEvent.PlayPause)
+                                    }
                                 }
                             }
                         }
+
                     }
                 }
                 Box(
