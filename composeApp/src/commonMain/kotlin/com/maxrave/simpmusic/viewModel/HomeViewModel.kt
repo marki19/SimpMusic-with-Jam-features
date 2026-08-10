@@ -85,6 +85,7 @@ class HomeViewModel(
 
     private val _mainHomeThumbnail: MutableStateFlow<String?> = MutableStateFlow(null)
     val mainHomeThumbnail: StateFlow<String?> = _mainHomeThumbnail
+    private var hasAttemptedInitialRetry = false
 
     init {
         if (runBlocking { dataStoreManager.cookie.first() }.isEmpty() &&
@@ -266,6 +267,15 @@ class HomeViewModel(
                             )
                         }
                     }
+                    val isError = home is Resource.Error || (home is Resource.Success && home.data?.second.isNullOrEmpty())
+                    if (isError && _homeItemList.value.isEmpty() && !hasAttemptedInitialRetry) {
+                        hasAttemptedInitialRetry = true
+                        Logger.w("HomeViewModel", "Initial home load failed — scheduling cold launch retry in 1.2s")
+                        delay(1200L)
+                        getHomeItemList(params)
+                        return@collect
+                    }
+
                     when {
                         home is Resource.Error -> home.message
                         exploreMoodItem is Resource.Error -> exploreMoodItem.message

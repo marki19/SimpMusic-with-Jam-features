@@ -30,15 +30,6 @@ fun JamGuestScreen(
     }
 
     if (isConnecting) {
-        var elapsedSeconds by remember { mutableIntStateOf(0) }
-        
-        LaunchedEffect(Unit) {
-            while (true) {
-                delay(1000)
-                elapsedSeconds++
-            }
-        }
-        
         AlertDialog(
             onDismissRequest = { 
                 viewModel.cancelConnection()
@@ -62,14 +53,7 @@ fun JamGuestScreen(
                 ) {
                     CircularProgressIndicator()
                     Spacer(modifier = Modifier.height(16.dp))
-                    if (elapsedSeconds < 5) {
-                        Text("Connecting to server...")
-                    } else {
-                        Text("Waking up server...")
-                        Text("This usually takes ~50s.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("${elapsedSeconds}s elapsed", style = MaterialTheme.typography.labelMedium)
+                    Text("Connecting to server...")
                 }
             }
         )

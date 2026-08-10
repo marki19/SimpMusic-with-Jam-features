@@ -59,14 +59,6 @@ fun JamHostScreen(
         }
     }
 
-    var elapsedSeconds by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            elapsedSeconds++
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -106,13 +98,7 @@ fun JamHostScreen(
                     style = MaterialTheme.typography.titleLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                if (elapsedSeconds < 5) {
-                    Text("Connecting to server...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    Text("Waking up server... (~50s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("${elapsedSeconds}s elapsed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Connecting to server...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                 Spacer(modifier = Modifier.height(32.dp))
                 OutlinedButton(

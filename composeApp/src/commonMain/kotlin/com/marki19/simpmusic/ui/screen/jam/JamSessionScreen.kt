@@ -150,10 +150,25 @@ fun JamSessionScreen(
         },
         bottomBar = {
             val localControlState by mediaPlayerHandler.controlState.collectAsStateWithLifecycle()
-            val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
             val isLocallyPlaying = localControlState.isPlaying || mediaPlayerHandler.player.playWhenReady
             val effectiveIsPlaying = if (isHost) isLocallyPlaying else session.playbackState.isPlaying
             val canSeek = isHost || perms.allowSeek
+
+            val pb = session.playbackState
+            val lagMs = if (pb.serverTimestampMs > 0)
+                (kotlin.time.Clock.System.now().toEpochMilliseconds() - pb.serverTimestampMs).coerceAtLeast(0L)
+            else 0L
+            val currentItem = pb.queue.find { it.videoId.cleanId() == pb.currentSongId?.cleanId() }
+                ?: pb.queue.firstOrNull()
+            val jamTotalMs = currentItem?.durationMs ?: 0L
+            val jamCurrentMs = if (effectiveIsPlaying) pb.playbackPositionMs + lagMs else pb.playbackPositionMs
+
+            val jamTimeline = com.maxrave.domain.data.model.streams.TimeLine(
+                current = jamCurrentMs,
+                total = jamTotalMs,
+                bufferedPercent = 100,
+                loading = pb.currentSongId.isNullOrBlank()
+            )
 
             JamBottomPlaybackControlBar(
                 isPlaying = effectiveIsPlaying,
@@ -161,7 +176,7 @@ fun JamSessionScreen(
                 repeat = session.playbackState.repeatMode,
                 canControl = isHost || perms.allowPause,
                 canSeek = canSeek,
-                timeline = timelineState,
+                timeline = jamTimeline,
                 onSeekTo = viewModel::seekTo,
                 onTogglePlayPause = {
                     if (isHost || perms.allowPause) {
@@ -1021,7 +1036,9 @@ private fun JamBottomPlaybackControlBar(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val currentMs = timeline.current.coerceAtLeast(0L)
-                val totalMs = timeline.total.coerceAtLeast(0L)
+                val rawTotal = timeline.total.coerceAtLeast(0L)
+                // Normalize duration: if total is given in seconds (e.g. < 10,000s) while current is in milliseconds, convert total to ms
+                val totalMs = if (rawTotal in 1L..9_999L) rawTotal * 1000L else rawTotal
                 var isScrubbing by remember { mutableStateOf(false) }
                 var sliderValue by remember { mutableFloatStateOf(0f) }
 

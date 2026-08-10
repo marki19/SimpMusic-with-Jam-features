@@ -210,6 +210,9 @@ class JamViewModel(
     ) {
         sessionInitJob?.cancel()
         sessionInitJob = viewModelScope.launch {
+            if (jamRepository.sessionState.value != null) {
+                jamRepository.leaveSession()
+            }
             _isConnecting.value = true
             try {
                 withTimeout(300_000L) {
@@ -282,8 +285,12 @@ class JamViewModel(
                             thumbnailUrl = effectiveThumbnailUrl,
                             durationMs = effectiveDurationMs
                         ))
-                        if (!mediaPlayerHandler.controlState.value.isPlaying) {
-                            mediaPlayerHandler.onPlayerEvent(PlayerEvent.PlayPause)
+                        _initialTrack?.let { track ->
+                            if (mediaPlayerHandler.nowPlayingState.value.track?.videoId != track.videoId) {
+                                mediaPlayerHandler.loadMediaItem(track, com.maxrave.common.Config.SONG_CLICK)
+                            } else if (!mediaPlayerHandler.controlState.value.isPlaying) {
+                                mediaPlayerHandler.onPlayerEvent(PlayerEvent.PlayPause)
+                            }
                         }
                     } else {
                         jamRepository.sessionState.first { it != null }
@@ -304,6 +311,9 @@ class JamViewModel(
     fun joinSession(roomId: String) {
         sessionInitJob?.cancel()
         sessionInitJob = viewModelScope.launch {
+            if (jamRepository.sessionState.value != null) {
+                jamRepository.leaveSession()
+            }
             _isConnecting.value = true
             try {
                 withTimeout(300_000L) {
