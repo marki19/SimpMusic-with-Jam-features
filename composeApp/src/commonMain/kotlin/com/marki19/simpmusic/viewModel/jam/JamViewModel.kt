@@ -135,30 +135,13 @@ class JamViewModel(
                     }
                     if (previousState == null) {
                         syncTaste()
-                        startHeartbeat()
                     }
                 } else {
-                    stopHeartbeat()
                     _hostTransferNotice.value = null
                 }
                 previousState = state
             }
         }
-    }
-
-    private fun startHeartbeat() {
-        heartbeatJob?.cancel()
-        heartbeatJob = viewModelScope.launch {
-            while (isActive) {
-                kotlinx.coroutines.delay(5.minutes) // 5 minutes
-                jamRepository.sendCommand(JamCommand.Ping)
-            }
-        }
-    }
-
-    private fun stopHeartbeat() {
-        heartbeatJob?.cancel()
-        heartbeatJob = null
     }
 
     fun dismissHostTransferNotice() {
