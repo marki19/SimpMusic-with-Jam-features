@@ -1,17 +1,14 @@
 package com.marki19.simpmusic.ui.screen.jam
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
-import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.marki19.simpmusic.viewModel.jam.JamViewModel
-import kotlinx.coroutines.delay
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,15 +23,11 @@ fun JamHostScreen(
     onNavigateToSession: () -> Unit,
     onBack: () -> Unit
 ) {
-    val sessionState by viewModel.sessionState.collectAsState()
-    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Immediately trigger session creation upon launching Host screen
     LaunchedEffect(Unit) {
-        if (sessionState != null) {
-            // We are already in a session, but want to host a new one. Tear down first.
-            viewModel.leaveSessionAndWait()
-        }
+        println("=== DEBUG JAM: JamHostScreen LaunchedEffect(Unit) -> calling createSession ===")
         viewModel.createSession(
             initialVideoId = initialVideoId,
             initialTitle = initialTitle,
@@ -44,22 +37,24 @@ fun JamHostScreen(
         )
     }
 
-    // Automatically navigate to Jam session screen as soon as session is ready
-    LaunchedEffect(sessionState) {
-        if (sessionState != null && sessionState!!.isHost) {
+    // Automatically navigate to Jam session screen when single-shot sessionCreatedEvent fires
+    LaunchedEffect(Unit) {
+        viewModel.sessionCreatedEvent.collectLatest { _ ->
+            println("=== DEBUG JAM: JamHostScreen sessionCreatedEvent received -> Triggering onNavigateToSession() ===")
             onNavigateToSession()
         }
     }
 
-    // Navigate back with an error toast if the connection times out or fails
+    // Navigate back with an error snackbar if the connection times out or fails
     LaunchedEffect(Unit) {
         viewModel.connectionError.collectLatest { errorMsg ->
-            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar(errorMsg)
             onBack()
         }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Hosting Jam") },

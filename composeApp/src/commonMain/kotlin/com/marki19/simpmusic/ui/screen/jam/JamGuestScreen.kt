@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.marki19.simpmusic.viewModel.jam.JamViewModel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,12 +20,18 @@ fun JamGuestScreen(
     onBack: () -> Unit
 ) {
     var roomCode by remember { mutableStateOf(TextFieldValue("")) }
-    val sessionState by viewModel.sessionState.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(sessionState) {
-        if (sessionState != null && !sessionState!!.isHost) {
+    LaunchedEffect(Unit) {
+        viewModel.sessionCreatedEvent.collectLatest { _ ->
             onNavigateToSession()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.connectionError.collectLatest { errorMsg ->
+            snackbarHostState.showSnackbar(errorMsg)
         }
     }
 
@@ -60,6 +66,7 @@ fun JamGuestScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Join a Jam") },

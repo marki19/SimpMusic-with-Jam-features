@@ -81,9 +81,16 @@ fun JamSessionScreen(
     val clipboardManager = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
 
-    // Navigate back if session ended
+    var wasActive by remember { mutableStateOf(false) }
+    if (sessionState != null) {
+        wasActive = true
+    }
+
+    // Only navigate back if the session WAS active previously and has now ended
     if (sessionState == null) {
-        LaunchedEffect(Unit) { onBack() }
+        if (wasActive) {
+            LaunchedEffect(Unit) { onBack() }
+        }
         return
     }
 
@@ -105,21 +112,16 @@ fun JamSessionScreen(
     val sessionChipText = if (isHost) "Your Jam Session" else "${hostName}'s Jam Session"
     val playlistName = nowPlayingState?.songEntity?.albumName?.ifBlank { null } ?: "Playlist"
 
-    // Full queue = manual + recommendations
-    val fullQueue = session.playbackState.queue
-
-    // Current playing song
-    val nowPlayingId = session.playbackState.currentSongId?.substringAfterLast('/')
-        ?: mediaPlayerHandler.nowPlayingState.value?.track?.videoId?.substringAfterLast('/')
-
-    val upcomingQueue = if (!nowPlayingId.isNullOrBlank()) {
-        fullQueue.filter { it.videoId.cleanId() != nowPlayingId.cleanId() }
-    } else {
-        fullQueue
+    // Separate real queue from recommendations
+    val currentSongId = session.playbackState.currentSongId?.cleanId()
+    val manualQueue = session.playbackState.queue.filter {
+        if (!currentSongId.isNullOrBlank()) it.videoId.cleanId() != currentSongId else true
     }
 
-    val manualQueue = upcomingQueue.filter { !it.isRecommendation }
-    val recommendations = upcomingQueue.filter { it.isRecommendation }
+    val recommendations = session.recommendations.filter { rec ->
+        val inQueue = session.playbackState.queue.any { it.videoId.cleanId() == rec.videoId.cleanId() }
+        !inQueue && (currentSongId.isNullOrBlank() || rec.videoId.cleanId() != currentSongId)
+    }
 
     // Lazy list state for reordering
     val listState = rememberLazyListState()
@@ -150,6 +152,7 @@ fun JamSessionScreen(
         },
         bottomBar = {
             val localControlState by mediaPlayerHandler.controlState.collectAsStateWithLifecycle()
+            val localTimeline by sharedViewModel.timeline.collectAsStateWithLifecycle()
             val isLocallyPlaying = localControlState.isPlaying || mediaPlayerHandler.player.playWhenReady
             val effectiveIsPlaying = if (isHost) isLocallyPlaying else session.playbackState.isPlaying
             val canSeek = isHost || perms.allowSeek
@@ -160,14 +163,25 @@ fun JamSessionScreen(
             else 0L
             val currentItem = pb.queue.find { it.videoId.cleanId() == pb.currentSongId?.cleanId() }
                 ?: pb.queue.firstOrNull()
-            val jamTotalMs = currentItem?.durationMs ?: 0L
-            val jamCurrentMs = if (effectiveIsPlaying) pb.playbackPositionMs + lagMs else pb.playbackPositionMs
+
+            val jamTotalMs = if (isHost && localTimeline.total > 0L) {
+                val rawTotal = localTimeline.total
+                if (rawTotal in 1L..9_999L) rawTotal * 1000L else rawTotal
+            } else {
+                currentItem?.durationMs ?: 0L
+            }
+
+            val jamCurrentMs = if (isHost) {
+                mediaPlayerHandler.getProgress()
+            } else {
+                if (effectiveIsPlaying) pb.playbackPositionMs + lagMs else pb.playbackPositionMs
+            }
 
             val jamTimeline = com.maxrave.domain.data.model.streams.TimeLine(
                 current = jamCurrentMs,
                 total = jamTotalMs,
-                bufferedPercent = 100,
-                loading = pb.currentSongId.isNullOrBlank()
+                bufferedPercent = if (isHost) localTimeline.bufferedPercent else 100,
+                loading = if (isHost) localTimeline.loading else pb.currentSongId.isNullOrBlank()
             )
 
             JamBottomPlaybackControlBar(

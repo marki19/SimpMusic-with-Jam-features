@@ -48,7 +48,7 @@ fun NavGraphBuilder.jamScreenGraph(
             initialDurationMs = dest.initialDurationMs,
             onNavigateToSession = { 
                 navController.navigate(JamSessionDestination(roomCode = jamViewModel.sessionState.value?.roomId ?: "")) {
-                    popUpTo(JamHostDestination::class) { inclusive = true }
+                    popUpTo<JamHostDestination> { inclusive = true }
                 }
             },
             onBack = { navController.navigateUp() }
@@ -61,7 +61,7 @@ fun NavGraphBuilder.jamScreenGraph(
             viewModel = jamViewModel,
             onNavigateToSession = { 
                 navController.navigate(JamSessionDestination(roomCode = jamViewModel.sessionState.value?.roomId ?: "")) {
-                    popUpTo(JamGuestDestination::class) { inclusive = true }
+                    popUpTo<JamGuestDestination> { inclusive = true }
                 }
             },
             onBack = { navController.navigateUp() }

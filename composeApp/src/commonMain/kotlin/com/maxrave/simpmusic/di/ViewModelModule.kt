@@ -158,7 +158,7 @@ val viewModelModule =
                 get(),
             )
         }
-        viewModel {
+        single {
             com.marki19.simpmusic.viewModel.jam.JamViewModel(
                 get(),
                 get(),

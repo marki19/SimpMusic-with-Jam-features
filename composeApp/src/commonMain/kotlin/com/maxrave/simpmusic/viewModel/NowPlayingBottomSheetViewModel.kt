@@ -28,6 +28,7 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -352,8 +353,10 @@ class NowPlayingBottomSheetViewModel(
                 }
 
                 is NowPlayingBottomSheetUIEvent.ChangePlaybackSpeedPitch -> {
-                    dataStoreManager.setPlaybackSpeed(ev.speed)
-                    dataStoreManager.setPitch(ev.pitch)
+                    viewModelScope.launch(Dispatchers.IO) {
+                        dataStoreManager.setPlaybackSpeed(ev.speed)
+                        dataStoreManager.setPitch(ev.pitch)
+                    }
                 }
 
                 is NowPlayingBottomSheetUIEvent.Share -> {
