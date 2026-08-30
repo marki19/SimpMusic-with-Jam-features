@@ -232,6 +232,17 @@ class SharedViewModel(
     }
 
     val openAppTime: StateFlow<Int> = dataStoreManager.openAppTime.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), 0)
+    val blurPlayerBackground: StateFlow<Boolean> =
+        dataStoreManager.blurPlayerBackground
+            .map { it == DataStoreManager.TRUE }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), true)
+
+    fun setBlurPlayerBackground(blur: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setBlurPlayerBackground(blur)
+        }
+    }
+
     private val _shareSavedLyrics: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val shareSavedLyrics: StateFlow<Boolean> get() = _shareSavedLyrics
 

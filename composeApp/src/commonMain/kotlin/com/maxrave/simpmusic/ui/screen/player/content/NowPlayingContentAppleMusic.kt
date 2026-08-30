@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
@@ -124,6 +125,7 @@ fun NowPlayingContentAppleMusic(
     // the right holder WITHIN a session (it survives rotation without a round trip), the view model
     // just supplies where the user was last.
     val sharedViewModel: SharedViewModel = koinInject()
+    val blurPlayerBackground by sharedViewModel.blurPlayerBackground.collectAsStateWithLifecycle(initialValue = true)
     var viewState by rememberSaveable {
         mutableStateOf(
             sharedViewModel.lastPlayerViewTab.value
@@ -194,42 +196,22 @@ fun NowPlayingContentAppleMusic(
     val typography = rememberAppleMusicTypography()
     val localDensity = LocalDensity.current
 
-    // The canvas page is black and every other state is the artwork gradient — but the swap must
-    // NOT be instant. viewState flips the moment a tab is tapped, while the Crossfade below still
-    // spends 300ms fading MAIN out: a hard swap repaints the page bright underneath a canvas that
-    // is still on screen, which is the flicker when leaving MAIN for Queue/Lyrics and again on the
-    // way back. Fading the black layer on the SAME 300ms curve keeps the two in step.
     val canvasBackdropAlpha by animateFloatAsState(
         targetValue = if (showCanvasBackdrop && !isVideoBackdropTop) 1f else 0f,
         animationSpec = tween(300),
         label = "appleMusicCanvasBackdrop",
     )
 
-    // Backdrop source for the Desktop dismiss button below. The glass layers MUST be a sibling of
-    // the button, never its parent: nesting the button inside the source is the render-feedback
-    // loop that crashes the RuntimeShader.
     val panelBackdrop = rememberBackdrop(Color.Black)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        Box(modifier = Modifier.matchParentSize().layerBackdrop(panelBackdrop)) {
-            // Apple frosts the COVER ART into the page background — the colour and the soft blotches
-            // of the artwork stay visible through it. A flat tinted gradient, which is what this used
-            // to be, gets the hue right and loses everything else: the page reads as a solid colour
-            // swatch rather than as the record it belongs to.
-            //
-            // Loaded straight from the url by AsyncImage rather than through the screen state's
-            // decoded bitmap. The background IS an image, so there is no reason to route it through a
-            // bitmap someone else has to remember to fill in — which is exactly what broke: the only
-            // thing feeding that bitmap was the artwork pager inside MAIN, so on QUEUE or LYRICS a
-            // track change left it null and the page fell back to a bare gradient.
-            //
-            // The palette still needs a bitmap, and it comes off this same load. One source, so the
-            // frosted art and the tint over it cannot end up belonging to different songs.
-            //
-            // The heavy blur radius is safe because the whole style is gated behind Android 12 for
-            // exactly this reason (isLyricsBlurSupported), and Crop + fillMaxSize means the artwork is
-            // scaled far past its own resolution — at this blur that costs nothing visually.
-            if (!backdropUrl.isNullOrBlank()) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (blurPlayerBackground && !backdropUrl.isNullOrBlank()) {
                 AsyncImage(
                     model =
                         ImageRequest
@@ -241,8 +223,6 @@ fun NowPlayingContentAppleMusic(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-                    // Same fallback the artwork pager carries: maxresdefault is missing for plenty of
-                    // videos, and without this the page would simply stay black.
                     onError = {
                         val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
                         if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
@@ -250,17 +230,18 @@ fun NowPlayingContentAppleMusic(
                     modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
                 )
             }
-            // The tint still rides on top, but as a translucent wash rather than the whole background:
-            // it keeps the vertical darkening that makes the controls readable at the bottom, while the
-            // frosted artwork shows through it.
-            Box(modifier = Modifier.fillMaxSize().alpha(BACKDROP_TINT_ALPHA).background(backdropBrush))
-            // Flat black only for a CANVAS (it fills the screen). A video letterboxes, so a black page
-            // turns the bars above and below it into dead black slabs — keep the artwork-tinted
-            // gradient there.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .alpha(if (blurPlayerBackground) BACKDROP_TINT_ALPHA else 1f)
+                        .background(backdropBrush),
+            )
             if (canvasBackdropAlpha > 0f) {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = canvasBackdropAlpha)))
             }
         }
+
         Crossfade(targetState = viewState, animationSpec = tween(300), label = "appleMusicView") { view ->
             when (view) {
                 AppleMusicView.MAIN ->

@@ -178,8 +178,11 @@ fun Modifier.appleMusicLyricFocus(
             else -> distanceFromCurrent
         }
     val fontSizeDp = with(LocalDensity.current) { AppleMusicLyricFontSize.toDp() }
+    // Only apply GPU blur to lines directly adjacent to the active line (distance 1 to 2).
+    // Distant lines rely strictly on targetAlpha falloff — rendering 20 concurrent RenderEffect
+    // blur passes completely saturates the RenderThread and causes dropped frames.
     val targetBlur: Dp =
-        if (!blurEnabled || !hasActiveLine || distanceFromCurrent == 0) {
+        if (!blurEnabled || !hasActiveLine || distanceFromCurrent == 0 || abs(distanceFromCurrent) > 2) {
             0.dp
         } else {
             fontSizeDp * (distance * BLUR_PER_LINE_EM).coerceAtMost(BLUR_MAX_EM)
@@ -202,7 +205,7 @@ fun Modifier.appleMusicLyricFocus(
     return this
         .alpha(lineAlpha)
         .then(
-            if (blurRadius > 0.dp) {
+            if (blurRadius > 0.5.dp) {
                 // Unbounded, NOT the default, on Android. blur(radius) alone uses
                 // BlurredEdgeTreatment.Rectangle, which clips the blur to the line's own bounds —
                 // so the softened glyphs get sliced off square at the edges and the line reads as a

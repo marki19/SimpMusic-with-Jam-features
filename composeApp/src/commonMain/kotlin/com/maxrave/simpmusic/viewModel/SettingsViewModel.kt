@@ -144,6 +144,8 @@ class SettingsViewModel(
     val proxyPassword: StateFlow<String> = _proxyPassword
     private var _autoCheckUpdate = MutableStateFlow(false)
     val autoCheckUpdate: StateFlow<Boolean> = _autoCheckUpdate
+    private var _blurPlayerBackground = MutableStateFlow(true)
+    val blurPlayerBackground: StateFlow<Boolean> = _blurPlayerBackground
     private var _updateChannel: MutableStateFlow<String> = MutableStateFlow(DataStoreManager.GITHUB)
     val updateChannel: StateFlow<String> = _updateChannel
     private val _aiProvider = MutableStateFlow<String>(DataStoreManager.AI_PROVIDER_OPENAI)
@@ -301,6 +303,7 @@ class SettingsViewModel(
         getUsingProxy()
         getCanvasCache()
         getTranslucentBottomBar()
+        getBlurPlayerBackground()
         getAutoCheckUpdate()
         getAIProvider()
         getAIApiKey()
@@ -537,6 +540,20 @@ class SettingsViewModel(
                     makeToast(formatString(Res.string.downloading_liked_songs, queued))
                 }
             }
+        }
+    }
+
+    private fun getBlurPlayerBackground() {
+        viewModelScope.launch {
+            dataStoreManager.blurPlayerBackground.collect {
+                _blurPlayerBackground.value = it == DataStoreManager.TRUE
+            }
+        }
+    }
+
+    fun setBlurPlayerBackground(blur: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setBlurPlayerBackground(blur)
         }
     }
 
