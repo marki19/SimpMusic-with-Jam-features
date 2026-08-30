@@ -300,8 +300,6 @@ fun NowPlayingScreenContent(
     val screenInfo = getScreenSizeInfo()
     val coroutineScope = rememberCoroutineScope()
 
-    com.maxrave.simpmusic.expect.SetSystemBarsVisibility(visible = false)
-
     val jamSessionState by jamViewModel.sessionState.collectAsStateWithLifecycle()
     val isJamActive = jamSessionState != null
     val jamIconTint = if (isJamActive) Color(0xFF87CEEB) else Color.White

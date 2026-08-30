@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -19,6 +20,7 @@ import com.maxrave.simpmusic.viewModel.RecentlySongsViewModel
 import com.maxrave.simpmusic.viewModel.SearchScreenUIState
 import com.maxrave.simpmusic.viewModel.SearchViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -46,7 +48,7 @@ fun JamAddSongBottomSheet(
     // Trigger search after debounce
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
-            delay(500) // Debounce 500ms
+            delay(500.milliseconds) // Debounce 500ms
             searchViewModel.searchSongs(searchQuery)
         }
     }
@@ -79,22 +81,22 @@ fun JamAddSongBottomSheet(
                     ) { index ->
                         val item = recentlyItems[index]
                         if (item is SongEntity) {
-                                SongFullWidthItems(
-                                    songEntity = item,
-                                    modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
-                                    isPlaying = false,
-                                    onClickListener = {
-                                        scope.launch {
-                                            sheetState.hide()
-                                            jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                            onDismissRequest()
-                                        }
-                                    },
-                                    onAddToQueue = {
-                                        jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
-                                        sharedViewModel.makeToast("Song added to Jam queue")
+                            SongFullWidthItems(
+                                songEntity = item,
+                                modifier = Modifier.fillMaxWidth(),
+                                isPlaying = false,
+                                onClickListener = {
+                                    scope.launch {
+                                        sheetState.hide()
+                                        jamViewModel.playNow(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
+                                        onDismissRequest()
                                     }
-                                )
+                                },
+                                onAddToQueue = { _ ->
+                                    jamViewModel.addToQueue(item.videoId, item.title, item.artistsName, item.thumbnailUrl, item.durationSeconds.toLong() * 1000L)
+                                    sharedViewModel.makeToast("Song added to Jam queue")
+                                }
+                            )
                         }
                     }
                 }
@@ -111,7 +113,7 @@ fun JamAddSongBottomSheet(
                         items(searchState.searchSongsResult) { song ->
                             SongFullWidthItems(
                                 track = song.toTrack(),
-                                modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 isPlaying = false,
                                 onClickListener = {
                                     scope.launch {
@@ -120,7 +122,7 @@ fun JamAddSongBottomSheet(
                                         onDismissRequest()
                                     }
                                 },
-                                onAddToQueue = {
+                                onAddToQueue = { _ ->
                                     jamViewModel.addToQueue(song.videoId, song.title ?: "", song.artists?.joinToString(", ") { it.name } ?: "", song.thumbnails?.lastOrNull()?.url, (song.durationSeconds?.toLong() ?: 0L) * 1000L)
                                     sharedViewModel.makeToast("Song added to Jam queue")
                                 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.marki19.domain.jam.JamCommand
 import com.marki19.domain.jam.JamPermissions
+import com.marki19.domain.jam.JamQueueItem
 import com.marki19.domain.jam.JamRepository
 import com.marki19.domain.jam.JamRepeatMode
 import com.marki19.domain.jam.JamSessionState
@@ -11,15 +12,13 @@ import com.marki19.domain.jam.cleanId
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.searchResult.songs.Artist
 import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
-import com.maxrave.domain.extension.toGenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
-import com.maxrave.domain.mediaservice.handler.PlayerEvent
 import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.repository.SongRepository
-import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -36,9 +35,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("SpellCheckingInspection")
 class JamViewModel(
     private val jamRepository: JamRepository,
@@ -58,6 +57,16 @@ class JamViewModel(
     val localUserId: String?
         get() = _localUserId
 
+    private var _localUserName: String? = null
+    val localUserName: String?
+        get() = _localUserName
+
+    val accountThumbnail: StateFlow<String?> = dataStoreManager.getString("AccountThumbUrl")
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+    
+    val accountName: StateFlow<String?> = dataStoreManager.getString("AccountName")
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
     // ── UI-only state ─────────────────────────────────────────────────────────
 
     private val _isConnecting = MutableStateFlow(false)
@@ -65,8 +74,12 @@ class JamViewModel(
 
     /** Emits an error message when session creation/join times out or fails catastrophically. */
     private val _connectionError = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val connectionError: SharedFlow<String> = _connectionError
+    val connectionError: SharedFlow<String> = _connectionError.asSharedFlow()
 
+    private val _nowPlayingJamTrack = MutableStateFlow<JamQueueItem?>(null)
+    val nowPlayingJamTrack: StateFlow<JamQueueItem?> = _nowPlayingJamTrack.asStateFlow()
+
+    // ── Internal state ────────────────────────────────────────────────────────
     /** Emits the room code when session creation or join completes cleanly. */
     private val _sessionCreatedEvent = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 1)
     val sessionCreatedEvent: SharedFlow<String> = _sessionCreatedEvent.asSharedFlow()
@@ -150,6 +163,7 @@ class JamViewModel(
     }
 
     /** Dispatches a command to the Jam session (Host or Guest). Safe to call from UI. */
+    @Suppress("unused")
     fun sendCommand(command: JamCommand) {
         viewModelScope.launch {
             jamRepository.sendCommand(command)
@@ -211,8 +225,11 @@ class JamViewModel(
             }
             _isConnecting.value = true
             try {
-                withTimeout(15.seconds) {
+                withTimeout(45.seconds) {
+                    // Try the definitive "currently used" account first (same source the home screen uses)
                     val account = accountRepository.getUsedGoogleAccount().firstOrNull()
+                        ?: accountRepository.getGoogleAccounts().firstOrNull()?.find { it.isUsed }
+                        ?: accountRepository.getGoogleAccounts().firstOrNull()?.firstOrNull()
                     val dsName = dataStoreManager.getString("AccountName").firstOrNull()
                     val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
 
@@ -220,8 +237,10 @@ class JamViewModel(
                     val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Host"
                     val rawImg = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
                     val imageUrl = if (rawImg.startsWith("//")) "https:$rawImg" else rawImg
+                    println("=== DEBUG JAM: createSession account=${account?.name} dsName=$dsName dsThumb=$dsThumb imageUrl=$imageUrl ===")
 
                     _localUserId = userId
+                    _localUserName = name
                     jamRepository.createSession(userId, name, imageUrl)
 
                     val activeTrack = mediaPlayerHandler.nowPlayingState.value.track
@@ -271,7 +290,7 @@ class JamViewModel(
                         _initialTrack = activeTrack
                     }
 
-                    val createdSession = withTimeoutOrNull(10.seconds) {
+                    val createdSession = withTimeoutOrNull(30.seconds) {
                         jamRepository.sessionState.first { it != null }
                     }
 
@@ -325,8 +344,11 @@ class JamViewModel(
             }
             _isConnecting.value = true
             try {
-                withTimeout(15.seconds) {
+                withTimeout(45.seconds) {
+                    // Try the definitive "currently used" account first (same source the home screen uses)
                     val account = accountRepository.getUsedGoogleAccount().firstOrNull()
+                        ?: accountRepository.getGoogleAccounts().firstOrNull()?.find { it.isUsed }
+                        ?: accountRepository.getGoogleAccounts().firstOrNull()?.firstOrNull()
                     val dsName = dataStoreManager.getString("AccountName").firstOrNull()
                     val dsThumb = dataStoreManager.getString("AccountThumbUrl").firstOrNull()
 
@@ -334,11 +356,13 @@ class JamViewModel(
                     val name = dsName?.takeIf { it.isNotBlank() } ?: account?.name?.takeIf { it.isNotBlank() } ?: "Guest"
                     val rawImageUrl = dsThumb?.takeIf { it.isNotBlank() } ?: account?.thumbnailUrl ?: ""
                     val imageUrl = if (rawImageUrl.startsWith("//")) "https:$rawImageUrl" else rawImageUrl
+                    println("=== DEBUG JAM: joinSession account=${account?.name} dsName=$dsName dsThumb=$dsThumb imageUrl=$imageUrl ===")
 
                     _localUserId = userId
+                    _localUserName = name
                     jamRepository.joinSession(roomId, userId, name, imageUrl)
 
-                    val joinedSession = withTimeoutOrNull(10.seconds) {
+                    val joinedSession = withTimeoutOrNull(30.seconds) {
                         jamRepository.sessionState.first { it != null }
                     }
                     if (joinedSession == null) {
@@ -367,6 +391,7 @@ class JamViewModel(
         _initialTrack = null
         _sessionCreatedEvent.resetReplayCache()
         viewModelScope.launch {
+            mediaPlayerHandler.hardReset()
             jamRepository.leaveSession()
         }
     }
@@ -389,7 +414,16 @@ class JamViewModel(
         viewModelScope.launch { jamRepository.sendCommand(JamCommand.RemoveQueueItem(queueId, targetVideoId)) }
     }
 
+    private val recentlyQueuedIds = mutableMapOf<String, Long>()
+
     fun addToQueue(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val lastAdded = recentlyQueuedIds[videoId] ?: 0L
+        if (now - lastAdded < 2000L) {
+            return
+        }
+        recentlyQueuedIds[videoId] = now
+
         val currentSongId = sessionState.value?.playbackState?.currentSongId
         
         if (currentSongId.isNullOrBlank()) {
@@ -409,6 +443,18 @@ class JamViewModel(
 
     fun playNow(videoId: String, title: String, artist: String, thumbnailUrl: String?, durationMs: Long) {
         pendingOutgoingSongId = sessionState.value?.playbackState?.currentSongId?.cleanId()
+        
+        // Cache this immediately for the UI since the server will remove it from the queue
+        _nowPlayingJamTrack.value = JamQueueItem(
+            queueId = "", // Not needed for UI metadata display
+            videoId = videoId,
+            title = title,
+            artist = artist,
+            thumbnailUrl = thumbnailUrl ?: "",
+            durationMs = durationMs,
+            addedBy = _localUserId ?: ""
+        )
+
         viewModelScope.launch {
             jamRepository.sendCommand(JamCommand.PlayNow(
                 videoId = videoId,

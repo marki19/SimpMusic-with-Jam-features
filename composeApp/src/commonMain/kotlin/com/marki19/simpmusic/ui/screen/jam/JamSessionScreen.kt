@@ -1,8 +1,5 @@
 package com.marki19.simpmusic.ui.screen.jam
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -18,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.maxrave.simpmusic.ui.icon.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +31,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,14 +67,18 @@ fun JamSessionScreen(
     val nowPlayingState by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val hostTransferNotice by viewModel.hostTransferNotice.collectAsStateWithLifecycle()
+    val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
+    val accountName by viewModel.accountName.collectAsStateWithLifecycle()
+    val nowPlayingJamTrack by viewModel.nowPlayingJamTrack.collectAsStateWithLifecycle()
+    val unreadChatCount by viewModel.unreadChatCount.collectAsStateWithLifecycle()
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showChatSheet by remember { mutableStateOf(false) }
     var showAddSongSheet by remember { mutableStateOf(false) }
     var showEndSessionDialog by remember { mutableStateOf(false) }
-    var showNowPlayingMenu by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
 
@@ -109,8 +110,6 @@ fun JamSessionScreen(
     val hostParticipant = session.participants.find { it.userId == session.hostId }
     val hostName = hostParticipant?.name?.ifBlank { null } ?: if (isHost) "Your" else "Host"
     val sessionTitleText = if (isHost) "Your Jam" else "${hostName}'s Jam"
-    val sessionChipText = if (isHost) "Your Jam Session" else "${hostName}'s Jam Session"
-    val playlistName = nowPlayingState?.songEntity?.albumName?.ifBlank { null } ?: "Playlist"
 
     // Separate real queue from recommendations
     val currentSongId = session.playbackState.currentSongId?.cleanId()
@@ -138,10 +137,7 @@ fun JamSessionScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            val unreadChatCount by viewModel.unreadChatCount.collectAsState()
             JamTopBar(
-                playlistName = playlistName,
-                isSyncing = isSyncing,
                 unreadChatCount = unreadChatCount,
                 onBack = onBack,
                 onChat = {
@@ -161,18 +157,25 @@ fun JamSessionScreen(
             val lagMs = if (pb.serverTimestampMs > 0)
                 (kotlin.time.Clock.System.now().toEpochMilliseconds() - pb.serverTimestampMs).coerceAtLeast(0L)
             else 0L
+            // Don't fall back to firstOrNull() — the server removes the playing track from the queue,
+            // so firstOrNull() would return the *next* song's duration, making the bar look nearly done.
             val currentItem = pb.queue.find { it.videoId.cleanId() == pb.currentSongId?.cleanId() }
-                ?: pb.queue.firstOrNull()
 
-            val jamTotalMs = if (isHost && localTimeline.total > 0L) {
-                val rawTotal = localTimeline.total
-                if (rawTotal in 1L..9_999L) rawTotal * 1000L else rawTotal
+            // Fallback duration from the local player when the playing song isn't in the queue
+            val fallbackDurationMs = nowPlayingJamTrack?.durationMs?.takeIf { it > 0L }
+                ?: nowPlayingState?.track?.durationSeconds?.let { it.toLong() * 1000L } 
+                ?: 0L
+
+            val jamTotalMs = if (localTimeline.total > 0L) {
+                // ExoPlayer's player.duration is always in milliseconds — use it for both host and guest.
+                // The guest's local player is also loaded by JamPlayerSynchronizer Section 1.
+                localTimeline.total
             } else {
-                currentItem?.durationMs ?: 0L
+                currentItem?.durationMs?.takeIf { it > 0L } ?: fallbackDurationMs
             }
 
             val jamCurrentMs = if (isHost) {
-                mediaPlayerHandler.getProgress()
+                localTimeline.current.coerceAtLeast(0L)
             } else {
                 if (effectiveIsPlaying) pb.playbackPositionMs + lagMs else pb.playbackPositionMs
             }
@@ -222,179 +225,217 @@ fun JamSessionScreen(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
 
-                // ── 2. Session Identity Block ───────────────────────────────────
-                item(key = "session_identity") {
+                // ── 2. Header & Host Actions (Spotify Style) ──────────────────
+                item(key = "header_and_actions") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
+                        // Device info
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                SimpIcons.Sensors,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "This device",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Title
                         Text(
                             text = sessionTitleText,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
                             color = MaterialTheme.colorScheme.onBackground,
-                            textAlign = TextAlign.Center,
                         )
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        // Avatar pill + Chip badge row
+                        // Host Avatar + Buttons
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable { showSettingsSheet = true }
-                                .padding(vertical = 2.dp, horizontal = 4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Stacked participant avatars in a pill border container
+                            ParticipantAvatar(
+                                participant = hostParticipant,
+                                fallbackName = if (isHost) (accountName ?: viewModel.localUserName ?: "Host") else (hostParticipant?.name ?: "Host"),
+                                isHost = true,
+                                overrideImageUrl = if (isHost) accountThumbnail else null,
+                            )
+                            
+                            // Invite button
                             Surface(
                                 shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                                modifier = Modifier.padding(end = 8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy((-8).dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        items(session.participants.take(3)) { participant ->
-                                            ParticipantAvatar(
-                                                participant = participant,
-                                                fallbackName = participant.userId,
-                                                isHost = participant.userId == session.hostId,
-                                            )
-                                        }
+                                color = Color.Transparent,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { 
+                                        clipboardManager.setText(AnnotatedString(session.roomId))
+                                        sharedViewModel.makeToast("Room code copied: ${session.roomId}")
                                     }
-                                }
+                            ) {
+                                Text(
+                                    "Invite",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
                             }
 
-                            // Accent colored chip with live participant count
-                            val listenerCount = session.participants.size.coerceAtLeast(1)
-                            val listenerCountText = if (listenerCount == 1) "1 listening" else "$listenerCount listening"
-
+                            // Leave / End Jam button
                             Surface(
                                 shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                                color = Color.Transparent,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable { showEndSessionDialog = true }
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        SimpIcons.Sensors,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp)
+                                Text(
+                                    if (isHost) "End" else "Leave",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // "Let others change what's playing" toggle (Host only)
+                        if (isHost) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Let others change what's playing",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                )
+                                Switch(
+                                    checked = perms.allowAddSongs && perms.allowPause,
+                                    onCheckedChange = { isChecked ->
+                                        viewModel.updatePermissions(
+                                            perms.copy(
+                                                allowAddSongs = isChecked,
+                                                allowRemoveSongs = isChecked,
+                                                allowPause = isChecked,
+                                                allowSkip = isChecked,
+                                                allowSeek = isChecked
+                                            )
+                                        )
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
                                     )
-                                    Text(
-                                        text = "$sessionChipText • $listenerCountText",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        // Participants list as a row of avatars
+                        Text(
+                            text = "${session.participants.size} participant${if (session.participants.size != 1) "s" else ""}",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(session.participants) { participant ->
+                                val isParticipantMe = participant.userId == viewModel.localUserId
+                                ParticipantAvatar(
+                                    participant = participant,
+                                    fallbackName = if (isParticipantMe) (accountName ?: viewModel.localUserName ?: participant.name) else participant.name,
+                                    isHost = participant.userId == session.hostId,
+                                    overrideImageUrl = if (isParticipantMe) accountThumbnail else null,
+                                )
                             }
                         }
                     }
                 }
 
-                // ── 3. Session Action Buttons ─────────────────────────────────
-                item(key = "session_actions") {
+                // ── 3. Add Songs Pill & Action Bar ────────────────────────────
+                item(key = "action_bar") {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                        horizontalArrangement = Arrangement.Center,
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Invite button
-                        OutlinedButton(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(session.roomId))
-                                sharedViewModel.makeToast("Room code copied: ${session.roomId}")
-                            },
-                            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp),
+                        Surface(
                             shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable { showAddSongSheet = true }
                         ) {
-                            Text(
-                                "Invite",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        // Leave / End Jam button
-                        OutlinedButton(
-                            onClick = { showEndSessionDialog = true },
-                            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp),
-                            shape = RoundedCornerShape(50),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                        ) {
-                            Text(
-                                if (isHost) "End Jam" else "Leave",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-
-                item(key = "divider_1") {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                    )
-                }
-
-                // ── 4. "Now Playing" Section ──────────────────────────────────
-                item(key = "now_playing_header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Now playing",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        if (isHost || perms.allowAddSongs) {
-                            Button(
-                                onClick = { showAddSongSheet = true },
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                modifier = Modifier.height(36.dp),
-                                shape = RoundedCornerShape(50),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = Color.Black // High-contrast black text on light blue background for WCAG AA compliance
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Icon(
                                     SimpIcons.Add,
                                     contentDescription = null,
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(16.dp)
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    "+ Add songs",
+                                    "Add songs",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── 4. Now Playing Section ────────────────────────────────────
+                item(key = "now_playing_header") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Now playing",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        if (isHost) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Text(
+                                    text = "HOST",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.Black
+                                    color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
@@ -402,35 +443,30 @@ fun JamSessionScreen(
                 }
 
                 item(key = "now_playing") {
-                    val currentSongId = session.playbackState.currentSongId?.cleanId()
                     val currentItem = session.playbackState.queue.find {
                         it.videoId.cleanId() == currentSongId
                     }
                     val initialTrack = viewModel.initialTrack
-                    val handlerTrack = mediaPlayerHandler.nowPlayingState.value?.track
-                    val handlerMediaItem = mediaPlayerHandler.nowPlayingState.value?.mediaItem?.takeIf { it.mediaId.isNotBlank() }
-                        ?: mediaPlayerHandler.nowPlaying.value
+                    val handlerTrack = nowPlayingState?.songEntity
+                    val handlerMediaItem = nowPlayingState?.mediaItem?.takeIf { it.mediaId.isNotBlank() }
 
-                    val resolvedTitle = currentItem?.title?.ifBlank { null }
+                    val resolvedTitle = nowPlayingJamTrack?.title?.ifBlank { null }
+                        ?: currentItem?.title?.ifBlank { null }
                         ?: initialTrack?.title?.ifBlank { null }
                         ?: handlerTrack?.title?.ifBlank { null }
-                        ?: nowPlayingState?.songEntity?.title?.ifBlank { null }
-                        ?: nowPlayingState?.mediaItem?.metadata?.title?.toString()?.ifBlank { null }
                         ?: handlerMediaItem?.metadata?.title?.toString()?.ifBlank { null }
                         ?: if (!currentSongId.isNullOrBlank()) "Playing Track" else null
 
-                    val resolvedArtist = currentItem?.artist?.ifBlank { null }
+                    val resolvedArtist = nowPlayingJamTrack?.artist?.ifBlank { null }
+                        ?: currentItem?.artist?.ifBlank { null }
                         ?: initialTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
-                        ?: handlerTrack?.artists?.joinToString(", ") { it.name }?.ifBlank { null }
-                        ?: nowPlayingState?.songEntity?.artistName?.joinToString(", ")?.ifBlank { null }
-                        ?: nowPlayingState?.mediaItem?.metadata?.artist?.toString()?.ifBlank { null }
+                        ?: handlerTrack?.artistName?.joinToString(", ")?.ifBlank { null }
                         ?: handlerMediaItem?.metadata?.artist?.toString()?.ifBlank { null }
 
-                    val resolvedArtwork: String? = currentItem?.thumbnailUrl?.ifBlank { null }
+                    val resolvedArtwork: String? = nowPlayingJamTrack?.thumbnailUrl?.ifBlank { null }
+                        ?: currentItem?.thumbnailUrl?.ifBlank { null }
                         ?: initialTrack?.thumbnails?.lastOrNull()?.url?.ifBlank { null }
-                        ?: handlerTrack?.thumbnails?.lastOrNull()?.url?.ifBlank { null }
-                        ?: nowPlayingState?.songEntity?.thumbnails?.ifBlank { null }
-                        ?: nowPlayingState?.mediaItem?.metadata?.artworkUri?.toString()?.ifBlank { null }
+                        ?: handlerTrack?.thumbnails?.ifBlank { null }
                         ?: handlerMediaItem?.metadata?.artworkUri?.toString()?.ifBlank { null }
 
                     LaunchedEffect(currentItem?.videoId) {
@@ -440,19 +476,15 @@ fun JamSessionScreen(
                     val isRoomEmpty = session.playbackState.currentSongId.isNullOrBlank() && session.playbackState.queue.isEmpty()
 
                     if (resolvedTitle != null) {
+                        val queuedById = nowPlayingJamTrack?.addedBy ?: currentItem?.addedBy ?: ""
+                        val queuedByParticipant = session.participants.find { it.userId == queuedById }
+                        
                         NowPlayingRow(
                             title = resolvedTitle,
                             artist = resolvedArtist ?: "Unknown Artist",
                             artworkUrl = resolvedArtwork,
-                            showMenu = showNowPlayingMenu,
-                            onToggleMenu = { showNowPlayingMenu = !showNowPlayingMenu },
-                            onDismissMenu = { showNowPlayingMenu = false },
+                            queuedByParticipant = queuedByParticipant,
                             onRowClick = onOpenNowPlaying,
-                            onRemoveFromQueue = {
-                                if (currentItem != null && (isHost || perms.allowRemoveSongs)) {
-                                    viewModel.removeFromQueue(currentItem.queueId)
-                                }
-                            }
                         )
                     } else if (isRoomEmpty) {
                         NowPlayingEmptyRow()
@@ -465,9 +497,9 @@ fun JamSessionScreen(
                 item(key = "queue_header") {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "Next From: $playlistName",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "Next from Queue",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -487,6 +519,7 @@ fun JamSessionScreen(
                     items(manualQueue, key = { it.queueId }) { item ->
                         val canDrag = isHost || (perms.allowReorder && item.addedBy == viewModel.localUserId)
                         val canRemove = isHost || (perms.allowRemoveSongs && item.addedBy == viewModel.localUserId)
+                        val queuedByParticipant = session.participants.find { it.userId == item.addedBy }
 
                         ReorderableItem(reorderState, key = item.queueId, enabled = canDrag) { isDragging ->
                             val dismissState = rememberSwipeToDismissBoxState(
@@ -526,9 +559,19 @@ fun JamSessionScreen(
                                     item = item,
                                     isDragging = isDragging,
                                     canDrag = canDrag,
+                                    queuedByParticipant = queuedByParticipant,
                                     dragModifier = Modifier.draggableHandle(
                                         onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                                     ),
+                                    onClick = {
+                                        viewModel.playNow(
+                                            videoId = item.videoId,
+                                            title = item.title,
+                                            artist = item.artist,
+                                            thumbnailUrl = item.thumbnailUrl,
+                                            durationMs = item.durationMs
+                                        )
+                                    },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -537,7 +580,7 @@ fun JamSessionScreen(
                 }
 
                 // ── Recommendations Section (if active) ─────────────────────
-                if (recommendations.isNotEmpty()) {
+                if (session.recommendationsEnabled && recommendations.isNotEmpty()) {
                     item(key = "recs_header") {
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -577,75 +620,34 @@ fun JamSessionScreen(
                     }
 
                     items(recommendations, key = { it.queueId }) { item ->
-                        var isItemAdded by remember(item.queueId) { mutableStateOf(false) }
-                        val dismissState = rememberSwipeToDismissBoxState(
-                            confirmValueChange = { value ->
-                                if (value == SwipeToDismissBoxValue.StartToEnd && !isItemAdded) {
-                                    isItemAdded = true
-                                    viewModel.addToQueue(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
-                                    sharedViewModel.makeToast("Added ${item.title} to queue")
-                                }
-                                false
-                            }
-                        )
-                        SwipeToDismissBox(
-                            state = dismissState,
+                        RecommendationRowItem(
+                            item = item,
+                            onPlayNow = {
+                                viewModel.playNow(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
+                                sharedViewModel.makeToast("Now playing: ${item.title}")
+                            },
+                            onAddToQueue = {
+                                viewModel.addToQueue(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
+                                sharedViewModel.makeToast("Added ${item.title} to queue")
+                            },
                             modifier = Modifier
                                 .padding(horizontal = 16.dp, vertical = 2.dp)
-                                .clip(RoundedCornerShape(12.dp))
                                 .animateItem(),
-                            enableDismissFromStartToEnd = true,
-                            enableDismissFromEndToStart = false,
-                            backgroundContent = {
-                                val alpha = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) 0.85f else 0f
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = alpha))
-                                        .padding(horizontal = 20.dp),
-                                    contentAlignment = Alignment.CenterStart,
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            SimpIcons.PlaylistAdd,
-                                            contentDescription = "Add to Queue",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            "Add to Queue",
-                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                            },
-                        ) {
-                            QueueRowItem(
-                                item = item,
-                                isDragging = false,
-                                canDrag = false,
-                                dragModifier = Modifier,
-                                modifier = Modifier
-                                    .animateItem()
-                                    .clickable {
-                                        viewModel.playNow(item.videoId, item.title, item.artist, item.thumbnailUrl, item.durationMs)
-                                        sharedViewModel.makeToast("Now playing: ${item.title}")
-                                    },
-                            )
-                        }
+                        )
                     }
                 }
             }
 
             // Chat Sheet
             if (showChatSheet) {
+                val chatSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                val chatScope = rememberCoroutineScope()
                 ModalBottomSheet(
                     onDismissRequest = {
                         showChatSheet = false
                         viewModel.setChatSheetOpen(false)
                     },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    sheetState = chatSheetState,
                 ) {
                     var textInput by remember { mutableStateOf("") }
                     Column(
@@ -661,8 +663,11 @@ fun JamSessionScreen(
                         ) {
                             Text("Session Chat", style = MaterialTheme.typography.titleLarge)
                             IconButton(onClick = {
-                                showChatSheet = false
-                                viewModel.setChatSheetOpen(false)
+                                chatScope.launch {
+                                    chatSheetState.hide()
+                                    showChatSheet = false
+                                    viewModel.setChatSheetOpen(false)
+                                }
                             }) {
                                 Icon(SimpIcons.Close, contentDescription = "Close")
                             }
@@ -673,15 +678,32 @@ fun JamSessionScreen(
                         ) {
                             items(chatMessages.reversed()) { msg ->
                                 val isMe = msg.senderId == viewModel.localUserId
-                                val senderName = session.participants.find { it.userId == msg.senderId }?.name?.ifBlank { null }
-                                    ?: if (isMe) "You" else "Participant"
+                                // Look up the participant by exact userId — this includes the local user
+                                val participant = session.participants.find { it.userId == msg.senderId }
+                                // If it's our own message and the participant lookup failed,
+                                // try matching by host ID as a fallback (host's userId == hostId)
+                                val effectiveParticipant = participant
+                                    ?: if (isMe && session.hostId == msg.senderId) session.participants.find { it.userId == session.hostId } else null
+                                val senderName = if (isMe)
+                                    effectiveParticipant?.name?.ifBlank { null } ?: viewModel.localUserName ?: "You"
+                                else
+                                    effectiveParticipant?.name?.ifBlank { null } ?: "Participant"
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
+                                    verticalAlignment = Alignment.Bottom,
                                 ) {
+                                    if (!isMe) {
+                                        ParticipantAvatar(
+                                            participant = effectiveParticipant,
+                                            fallbackName = senderName,
+                                            isHost = msg.senderId == session.hostId,
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
                                     Column(
                                         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
-                                        modifier = Modifier.widthIn(max = 280.dp)
+                                        modifier = Modifier.widthIn(max = 260.dp)
                                     ) {
                                         Text(
                                             senderName,
@@ -697,8 +719,18 @@ fun JamSessionScreen(
                                                 text = msg.text,
                                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                                 style = MaterialTheme.typography.bodyMedium,
+                                                color = if (isMe) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
+                                    }
+                                    if (isMe) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        ParticipantAvatar(
+                                            participant = effectiveParticipant,
+                                            fallbackName = effectiveParticipant?.name ?: accountName ?: viewModel.localUserName ?: senderName,
+                                            isHost = isHost,
+                                            overrideImageUrl = accountThumbnail,
+                                        )
                                     }
                                 }
                             }
@@ -722,7 +754,12 @@ fun JamSessionScreen(
                                     textInput = ""
                                 },
                             ) {
-                                Icon(SimpIcons.OpenInNew, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+                                Icon(
+                                    SimpIcons.Send,
+                                    contentDescription = "Send",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
                             }
                         }
                     }
@@ -739,7 +776,6 @@ fun JamSessionScreen(
                 onUpdatePermissions = viewModel::updatePermissions,
                 onToggleRecommendations = viewModel::toggleRecommendations,
                 onLeave = { showSettingsSheet = false; viewModel.leaveSession(); onBack() },
-                onDismiss = { showSettingsSheet = false },
             )
         }
     }
@@ -764,14 +800,29 @@ fun JamSessionScreen(
                         viewModel.leaveSession()
                         onBack()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
-                    Text(if (session.isHost) "End Session" else "Leave")
+                    Text(
+                        text = if (session.isHost) "End Session" else "Leave",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showEndSessionDialog = false }) {
-                    Text("Cancel")
+                OutlinedButton(
+                    onClick = { showEndSessionDialog = false },
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text(
+                        "Cancel",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         )
@@ -794,40 +845,19 @@ fun JamSessionScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun JamTopBar(
-    playlistName: String,
-    isSyncing: Boolean,
     unreadChatCount: Int,
     onBack: () -> Unit,
     onChat: () -> Unit,
 ) {
     TopAppBar(
         title = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    "PLAYING FROM PLAYLIST",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-                Text(
-                    playlistName,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            // Keep title empty for Spotify minimal UI
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(
-                    SimpIcons.KeyboardArrowDown,
-                    contentDescription = "Minimize Jam",
+                    SimpIcons.Close,
+                    contentDescription = "Close Jam",
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -866,11 +896,8 @@ private fun NowPlayingRow(
     title: String,
     artist: String,
     artworkUrl: String?,
-    showMenu: Boolean,
-    onToggleMenu: () -> Unit,
-    onDismissMenu: () -> Unit,
+    queuedByParticipant: JamParticipant?,
     onRowClick: () -> Unit,
-    onRemoveFromQueue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -879,7 +906,7 @@ private fun NowPlayingRow(
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onRowClick)
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
@@ -894,44 +921,51 @@ private fun NowPlayingRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(end = 6.dp)
+                ) {
+                    Text(
+                        text = "E",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+                Text(
+                    text = artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        if (queuedByParticipant != null) {
+            ParticipantAvatar(
+                participant = queuedByParticipant,
+                fallbackName = queuedByParticipant.name,
+                isHost = false
             )
+            Spacer(modifier = Modifier.width(12.dp))
         }
-        Box {
-            IconButton(onClick = onToggleMenu) {
-                Icon(
-                    SimpIcons.MoreVert,
-                    contentDescription = "Track options",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = onDismissMenu
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Remove from queue") },
-                    onClick = {
-                        onDismissMenu()
-                        onRemoveFromQueue()
-                    },
-                    leadingIcon = {
-                        Icon(SimpIcons.Delete, contentDescription = null)
-                    }
-                )
-            }
-        }
+
+        Icon(
+            SimpIcons.MoreVert,
+            contentDescription = "More options",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -945,6 +979,8 @@ private fun QueueRowItem(
     isDragging: Boolean,
     canDrag: Boolean,
     dragModifier: Modifier,
+    queuedByParticipant: JamParticipant?,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val elevation by androidx.compose.animation.core.animateFloatAsState(
@@ -954,9 +990,85 @@ private fun QueueRowItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
         tonalElevation = elevation.dp,
         color = if (isDragging) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Circle selector style
+            Icon(
+                SimpIcons.AddCircleOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+
+            // Title & Artist
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = item.artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Queued By Avatar
+            if (queuedByParticipant != null) {
+                ParticipantAvatar(
+                    participant = queuedByParticipant,
+                    fallbackName = queuedByParticipant.name,
+                    isHost = false
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+
+            // Far Right: Dedicated Always-Visible Drag Handle (☰)
+            if (canDrag) {
+                Icon(
+                    SimpIcons.DragHandle,
+                    contentDescription = "Reorder",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .size(24.dp)
+                        .then(dragModifier),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationRowItem(
+    item: JamQueueItem,
+    onPlayNow: () -> Unit,
+    onAddToQueue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onPlayNow),
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             modifier = Modifier
@@ -964,7 +1076,6 @@ private fun QueueRowItem(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Far Left: Album Artwork Thumbnail
             AsyncImage(
                 model = item.thumbnailUrl,
                 contentDescription = "Cover",
@@ -976,7 +1087,6 @@ private fun QueueRowItem(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Middle: Title & Artist
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.title,
@@ -995,15 +1105,11 @@ private fun QueueRowItem(
                 )
             }
 
-            // Far Right: Dedicated Always-Visible Drag Handle (☰)
-            if (canDrag) {
+            IconButton(onClick = onAddToQueue) {
                 Icon(
-                    SimpIcons.DragHandle,
-                    contentDescription = "Reorder",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .size(24.dp)
-                        .then(dragModifier),
+                    SimpIcons.PlaylistAdd,
+                    contentDescription = "Add to Queue",
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -1050,9 +1156,8 @@ private fun JamBottomPlaybackControlBar(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val currentMs = timeline.current.coerceAtLeast(0L)
-                val rawTotal = timeline.total.coerceAtLeast(0L)
-                // Normalize duration: if total is given in seconds (e.g. < 10,000s) while current is in milliseconds, convert total to ms
-                val totalMs = if (rawTotal in 1L..9_999L) rawTotal * 1000L else rawTotal
+                // total is already normalized to ms by the caller — don't re-apply the seconds heuristic
+                val totalMs = timeline.total.coerceAtLeast(0L)
                 var isScrubbing by remember { mutableStateOf(false) }
                 var sliderValue by remember { mutableFloatStateOf(0f) }
 
@@ -1088,8 +1193,8 @@ private fun JamBottomPlaybackControlBar(
                                             .height(4.dp)
                                             .padding(horizontal = 3.dp)
                                             .clip(RoundedCornerShape(8.dp)),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                         strokeCap = StrokeCap.Round,
                                     )
                                 }
@@ -1102,8 +1207,8 @@ private fun JamBottomPlaybackControlBar(
                                             .height(4.dp)
                                             .padding(horizontal = 3.dp)
                                             .clip(RoundedCornerShape(8.dp)),
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                         strokeCap = StrokeCap.Round,
                                         drawStopIndicator = {},
                                     )
@@ -1121,7 +1226,7 @@ private fun JamBottomPlaybackControlBar(
                                     },
                                     onValueChangeFinished = {
                                         isScrubbing = false
-                                        if (canSeek && totalMs > 0L) {
+                                        if (canSeek) {
                                             val targetMs = ((sliderValue / 100f) * totalMs.toFloat()).toLong()
                                             onSeekTo(targetMs)
                                         }
@@ -1132,7 +1237,7 @@ private fun JamBottomPlaybackControlBar(
                                         .padding(vertical = 4.dp),
                                     track = { sliderState ->
                                         SliderDefaults.Track(
-                                            modifier = Modifier.height(5.dp),
+                                            modifier = Modifier.height(4.dp),
                                             enabled = canSeek,
                                             sliderState = sliderState,
                                             colors = SliderDefaults.colors().copy(
@@ -1148,10 +1253,8 @@ private fun JamBottomPlaybackControlBar(
                                     thumb = {
                                         SliderDefaults.Thumb(
                                             modifier = Modifier
-                                                .height(18.dp)
-                                                .width(8.dp)
-                                                .padding(vertical = 4.dp),
-                                            thumbSize = DpSize(8.dp, 8.dp),
+                                                .size(14.dp),
+                                            thumbSize = DpSize(14.dp, 14.dp),
                                             interactionSource = remember { MutableInteractionSource() },
                                             colors = SliderDefaults.colors().copy(
                                                 thumbColor = MaterialTheme.colorScheme.primary,
@@ -1268,12 +1371,17 @@ private fun ParticipantAvatar(
     participant: JamParticipant?,
     fallbackName: String,
     isHost: Boolean,
+    overrideImageUrl: String? = null,
 ) {
-    val displayName = participant?.name ?: fallbackName
+    val displayName = participant?.name?.ifBlank { null } ?: fallbackName
+    val imageUrl = overrideImageUrl?.ifBlank { null } ?: participant?.imageUrl?.ifBlank { null }
+    val hasValidImage = !imageUrl.isNullOrBlank()
+
     Box(modifier = Modifier.size(28.dp)) {
-        if (participant != null && participant.imageUrl.isNotBlank()) {
+        if (hasValidImage && imageUrl != null) {
+            val resolvedUrl = if (imageUrl.startsWith("//")) "https:$imageUrl" else imageUrl
             AsyncImage(
-                model = participant.imageUrl,
+                model = resolvedUrl,
                 contentDescription = "Profile",
                 modifier = Modifier
                     .size(28.dp)
@@ -1282,6 +1390,7 @@ private fun ParticipantAvatar(
                 contentScale = ContentScale.Crop,
             )
         } else {
+            val initial = displayName.take(1).uppercase().ifBlank { "?" }
             Box(
                 modifier = Modifier
                     .size(28.dp)
@@ -1294,9 +1403,9 @@ private fun ParticipantAvatar(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = displayName.take(2).uppercase(),
+                    text = initial,
                     color = if (isHost) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
                 )
             }
         }
@@ -1323,7 +1432,6 @@ private fun JamSettingsSheetContent(
     onUpdatePermissions: (com.marki19.domain.jam.JamPermissions) -> Unit,
     onToggleRecommendations: (Boolean) -> Unit,
     onLeave: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val perms = session.permissions
     Column(

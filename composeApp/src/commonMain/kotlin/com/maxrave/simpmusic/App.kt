@@ -333,16 +333,14 @@ fun App(viewModel: SharedViewModel = koinInject()) {
         it.hasRoute(FullscreenDestination::class)
     } == true
 
-    // ──────── EXPERIMENTAL FULLSCREEN MODE ────────────────────────────────────
-    // Set to `true` to hide phone system navigation buttons (back, home, recents).
-    // Set to `false` to undo anytime.
-    val EXPERIMENTAL_FULLSCREEN_MODE = true
+    // Keep the phone's system navigation bar (back, home, recents) visible and docked at the bottom
+    val EXPERIMENTAL_FULLSCREEN_MODE = false
 
     val hasTrack = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
     val isShowMiniPlayer = hasTrack && !isJamScreen && !isInFullscreenRoute
     val isNavBarVisible = !isJamScreen && !isInFullscreenRoute
 
-    com.maxrave.simpmusic.expect.SetSystemBarsVisibility(visible = !EXPERIMENTAL_FULLSCREEN_MODE && !isInFullscreenRoute)
+    com.maxrave.simpmusic.expect.SetSystemBarsVisibility(visible = !isInFullscreenRoute)
 
     LaunchedEffect(navBackStackEntry) {
         Logger.d("MainActivity", "Current destination: ${navBackStackEntry?.destination?.route}")
