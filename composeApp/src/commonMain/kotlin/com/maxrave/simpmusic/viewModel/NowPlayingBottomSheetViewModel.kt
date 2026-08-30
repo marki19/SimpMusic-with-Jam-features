@@ -332,7 +332,7 @@ class NowPlayingBottomSheetViewModel(
 
                 is NowPlayingBottomSheetUIEvent.AddToQueue -> {
                     val songEntity = songRepository.getSongById(songUIState.videoId).singleOrNull() ?: return@launch
-                    sharedViewModel.addListToQueue(arrayListOf(songEntity.toTrack()))
+                    mediaPlayerHandler.playNext(songEntity.toTrack())
                 }
 
                 is NowPlayingBottomSheetUIEvent.ChangeLyricsProvider -> {
