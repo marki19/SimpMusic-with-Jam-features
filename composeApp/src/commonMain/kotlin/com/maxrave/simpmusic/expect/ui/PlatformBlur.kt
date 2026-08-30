@@ -1,14 +1,20 @@
 package com.maxrave.simpmusic.expect.ui
 
+import androidx.compose.ui.graphics.ImageBitmap
+
 /**
- * Whether this platform can actually render `Modifier.blur`.
- *
- * Named after the capability, not the OS version, because the answer differs in kind between
- * targets: Android gained the backing `RenderEffect` in API 31 and **silently ignores** the
- * modifier below that — no crash, no warning, just a page with no blur — while Desktop draws it
- * through skiko regardless of any Android version.
- *
- * Used to hide the Apple Music lyrics style from Settings where it would render as a plain
- * mostly-transparent list, which is not the design.
+ * Whether the platform supports hardware-accelerated real-time Compose `Modifier.blur` (RenderEffect on Android 12+ / Skiko on Desktop).
+ */
+expect fun isHardwareBlurSupported(): Boolean
+
+/**
+ * Whether Apple Music lyrics style (with typography, layout, and focus) is supported.
+ * Returns true across all platforms since Android 10+ uses Alpha Depth-of-Field fallback.
  */
 expect fun isLyricsBlurSupported(): Boolean
+
+/**
+ * Creates a soft blurred fallback bitmap for background rendering on platforms without hardware RenderEffect (e.g. Android 10/11).
+ */
+expect fun createBlurredBitmapFallback(bitmap: ImageBitmap?): ImageBitmap?
+

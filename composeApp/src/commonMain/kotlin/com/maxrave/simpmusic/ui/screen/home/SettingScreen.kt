@@ -681,18 +681,11 @@ fun SettingScreen(
                         )
                     },
                 )
-                // The Apple Music treatments ARE the blur — the frosted page behind the player, and
-                // the depth of field on the lyrics — and Modifier.blur is a documented no-op below
-                // Android 12, so on an older device they render as a flat, wrong-looking version of
-                // themselves. The requirement is spelled out on the option itself rather than left
-                // for the user to discover after switching.
-                val requiresAndroid12 = " (" + stringResource(Res.string.requires_android_12) + ")"
                 val nowPlayingStyleLabels =
                     listOf(
                         DataStoreManager.NOW_PLAYING_STYLE_SPOTIFY to stringResource(Res.string.now_playing_style_spotify),
                         DataStoreManager.NOW_PLAYING_STYLE_M3_EXPRESSIVE to stringResource(Res.string.now_playing_style_m3_expressive),
-                        DataStoreManager.NOW_PLAYING_STYLE_APPLE_MUSIC to
-                            stringResource(Res.string.now_playing_style_apple_music) + requiresAndroid12,
+                        DataStoreManager.NOW_PLAYING_STYLE_APPLE_MUSIC to stringResource(Res.string.now_playing_style_apple_music),
                     )
                 SettingItem(
                     title = stringResource(Res.string.now_playing_style),
@@ -717,40 +710,34 @@ fun SettingScreen(
                         )
                     },
                 )
-                // Hidden outright below Android 12 rather than offered with one option: the Apple
-                // Music treatment IS the blur, and Modifier.blur is a documented no-op there, so
-                // the choice would be between Classic and a broken-looking Classic.
-                if (isLyricsBlurSupported()) {
-                    val lyricsStyleLabels =
-                        listOf(
-                            DataStoreManager.LYRICS_STYLE_CLASSIC to stringResource(Res.string.lyrics_style_classic),
-                            DataStoreManager.LYRICS_STYLE_APPLE_MUSIC to
-                                stringResource(Res.string.lyrics_style_apple_music) + requiresAndroid12,
-                        )
-                    SettingItem(
-                        title = stringResource(Res.string.lyrics_style),
-                        subtitle = lyricsStyleLabels.firstOrNull { it.first == lyricsStyle }?.second ?: "",
-                        onClick = {
-                            viewModel.setAlertData(
-                                SettingAlertState(
-                                    title = runBlocking { getString(Res.string.lyrics_style) },
-                                    selectOne =
-                                        SettingAlertState.SelectData(
-                                            listSelect = lyricsStyleLabels.map { (it.first == lyricsStyle) to it.second },
-                                        ),
-                                    confirm =
-                                        runBlocking { getString(Res.string.change) } to { state ->
-                                            val selected = state.selectOne?.getSelected()
-                                            lyricsStyleLabels.firstOrNull { it.second == selected }?.first?.let {
-                                                sharedViewModel.setLyricsStyle(it)
-                                            }
-                                        },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
-                                ),
-                            )
-                        },
+                val lyricsStyleLabels =
+                    listOf(
+                        DataStoreManager.LYRICS_STYLE_CLASSIC to stringResource(Res.string.lyrics_style_classic),
+                        DataStoreManager.LYRICS_STYLE_APPLE_MUSIC to stringResource(Res.string.lyrics_style_apple_music),
                     )
-                }
+                SettingItem(
+                    title = stringResource(Res.string.lyrics_style),
+                    subtitle = lyricsStyleLabels.firstOrNull { it.first == lyricsStyle }?.second ?: "",
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.lyrics_style) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect = lyricsStyleLabels.map { (it.first == lyricsStyle) to it.second },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val selected = state.selectOne?.getSelected()
+                                        lyricsStyleLabels.firstOrNull { it.second == selected }?.first?.let {
+                                            sharedViewModel.setLyricsStyle(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
 
                 // Independent of BOTH style settings, and not gated on Android 12: this changes
                 // what the words SAY, not how they are drawn, so it applies to every style on

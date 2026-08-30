@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.isHardwareBlurSupported
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.typo
 import kotlin.math.abs
@@ -178,11 +179,11 @@ fun Modifier.appleMusicLyricFocus(
             else -> distanceFromCurrent
         }
     val fontSizeDp = with(LocalDensity.current) { AppleMusicLyricFontSize.toDp() }
-    // Only apply GPU blur to lines directly adjacent to the active line (distance 1 to 2).
-    // Distant lines rely strictly on targetAlpha falloff — rendering 20 concurrent RenderEffect
-    // blur passes completely saturates the RenderThread and causes dropped frames.
+    // Only apply GPU blur to lines directly adjacent to the active line (distance 1 to 2) on
+    // platforms with hardware RenderEffect (Android 12+ / Desktop).
+    // On Android 10/11, targetBlur is 0.dp and focus is achieved via smooth alpha depth-of-field.
     val targetBlur: Dp =
-        if (!blurEnabled || !hasActiveLine || distanceFromCurrent == 0 || abs(distanceFromCurrent) > 2) {
+        if (!blurEnabled || !isHardwareBlurSupported() || !hasActiveLine || distanceFromCurrent == 0 || abs(distanceFromCurrent) > 2) {
             0.dp
         } else {
             fontSizeDp * (distance * BLUR_PER_LINE_EM).coerceAtMost(BLUR_MAX_EM)

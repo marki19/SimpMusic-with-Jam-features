@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -55,6 +56,8 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -62,6 +65,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.expect.ui.createBlurredBitmapFallback
+import com.maxrave.simpmusic.expect.ui.isHardwareBlurSupported
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -169,6 +174,7 @@ fun NowPlayingContentAppleMusic(
     // this exact url while the execute() call did not, so this uses the path already proven to
     // work rather than a second one that has to be kept working.
     var backdropUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
+    var blurredBitmapFallback by remember(backdropUrl) { mutableStateOf<ImageBitmap?>(null) }
 
     val paletteColor = state.startColor.value
     val seedColor = if (paletteColor == Color.Black) seed else paletteColor
@@ -212,23 +218,58 @@ fun NowPlayingContentAppleMusic(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (blurPlayerBackground && !backdropUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(backdropUrl)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(backdropUrl + "BIGGER")
-                            .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-                    onError = {
-                        val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
-                        if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
-                    },
-                    modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
-                )
+                if (isHardwareBlurSupported()) {
+                    AsyncImage(
+                        model =
+                            ImageRequest
+                                .Builder(LocalPlatformContext.current)
+                                .data(backdropUrl)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .diskCacheKey(backdropUrl + "BIGGER")
+                                .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
+                        onError = {
+                            val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
+                            if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
+                        },
+                        modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
+                    )
+                } else {
+                    // Android 10 & 11 fallback: software downsampled blur bitmap
+                    if (blurredBitmapFallback != null) {
+                        Image(
+                            bitmap = blurredBitmapFallback!!,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            filterQuality = FilterQuality.Medium,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(backdropUrl)
+                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                    .diskCacheKey(backdropUrl + "BIGGER")
+                                    .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            onSuccess = {
+                                val imageBitmap = it.result.image.toImageBitmap()
+                                actions.onArtworkBitmap(imageBitmap)
+                                blurredBitmapFallback = createBlurredBitmapFallback(imageBitmap)
+                            },
+                            onError = {
+                                val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
+                                if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
+                            },
+                            modifier = Modifier.fillMaxSize().alpha(0f),
+                        )
+                    }
+                }
             }
             Box(
                 modifier =
