@@ -52,6 +52,7 @@ include(
     ":jamSync",
     ":spotify",
     ":aiService",
+    ":autoEqService",
     ":lyricsService",
     ":media-jvm",
     ":media-jvm-ui",
@@ -64,6 +65,7 @@ include(
     ":lastfm",
     ":lastfm-empty",
     ":kizzy",
+    ":listenTogether",
 )
 
 // core modules
@@ -75,10 +77,12 @@ project(":domain").projectDir = File(coreDir, "domain")
 project(":ktorExt").projectDir = File(serviceDir, "ktorExt")
 project(":jamSync").projectDir = File(serviceDir, "jamSync")
 project(":aiService").projectDir = File(serviceDir, "aiService")
+project(":autoEqService").projectDir = File(serviceDir, "autoEqService")
 project(":lyricsService").projectDir = File(serviceDir, "lyricsService")
 project(":kotlinYtmusicScraper").projectDir = File(serviceDir, "kotlinYtmusicScraper")
 project(":spotify").projectDir = File(serviceDir, "spotify")
 project(":kizzy").projectDir = File(serviceDir, "kizzy")
+project(":listenTogether").projectDir = File(serviceDir, "listenTogether")
 
 // media modules
 project(":media-jvm").projectDir = File(mediaDir, "media-jvm")
