@@ -27,8 +27,6 @@ import com.maxrave.simpmusic.ui.screen.library.MixForYouScreen
 import com.maxrave.simpmusic.ui.screen.other.SearchScreen
 import com.maxrave.simpmusic.ui.screen.player.FullscreenPlayer
 
-import com.marki19.simpmusic.ui.navigation.graph.jamScreenGraph
-
 @Composable
 @ExperimentalMaterial3Api
 @ExperimentalFoundationApi
@@ -147,14 +145,6 @@ fun AppNavigationGraph(
             showBottomBar = {
                 showNavBar(false)
             },
-        )
-        // Jam screen graph
-        jamScreenGraph(
-            innerPadding = innerPadding,
-            navController = navController,
-            showNowPlayingSheet = showNowPlayingSheet,
-            hideNavBar = hideNavBar,
-            showNavBar = showNavBar,
         )
     }
 }
