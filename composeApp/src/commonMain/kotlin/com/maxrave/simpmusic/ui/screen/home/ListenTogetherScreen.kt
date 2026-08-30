@@ -113,6 +113,8 @@ import simpmusic.composeapp.generated.resources.lt_connecting
 import simpmusic.composeapp.generated.resources.lt_create_room
 import simpmusic.composeapp.generated.resources.lt_credit_compatible
 import simpmusic.composeapp.generated.resources.lt_credit_protocol
+import simpmusic.composeapp.generated.resources.lt_default_server_location
+import simpmusic.composeapp.generated.resources.lt_default_server_name
 import simpmusic.composeapp.generated.resources.lt_disconnect
 import simpmusic.composeapp.generated.resources.lt_display_name
 import simpmusic.composeapp.generated.resources.lt_display_name_hint
@@ -181,6 +183,7 @@ fun ListenTogetherScreen(
     viewModel: ListenTogetherViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
     val displayName by viewModel.displayName.collectAsStateWithLifecycle()
     val codeInput by viewModel.roomCodeInput.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
@@ -260,7 +263,7 @@ fun ListenTogetherScreen(
                     // this column and takes part in no measurement, so nothing else pushes down for it.
                     Spacer(Modifier.height(BACK_BUTTON_STRIP))
                     TitleBlock(inRoom = state.inRoom)
-                    ConnectionLine(state.connection, viewModel::connect, viewModel::disconnect)
+                    ConnectionLine(state.connection, serverUrl, viewModel::connect, viewModel::disconnect)
                     AnimatedVisibility(visible = state.inRoom) {
                         RoomCodePoster(state, copyCode, shareCode)
                     }
@@ -292,7 +295,7 @@ fun ListenTogetherScreen(
             ) {
                 Spacer(Modifier.height(BACK_BUTTON_STRIP))
                 TitleBlock(inRoom = state.inRoom)
-                ConnectionLine(state.connection, viewModel::connect, viewModel::disconnect)
+                ConnectionLine(state.connection, serverUrl, viewModel::connect, viewModel::disconnect)
                 AnimatedVisibility(visible = state.inRoom) {
                     RoomCodePoster(state, copyCode, shareCode)
                 }
@@ -501,6 +504,7 @@ private fun TitleBlock(inRoom: Boolean) {
 @Composable
 private fun ConnectionLine(
     connection: RoomConnection,
+    serverUrl: String,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
@@ -545,10 +549,18 @@ private fun ConnectionLine(
         )
         Column(Modifier.weight(1f)) {
             Text(label, style = typo().bodyMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val serverSubtitle =
+                if (serverUrl.isNotBlank()) {
+                    serverUrl.removePrefix("wss://").removePrefix("ws://").removeSuffix("/ws")
+                } else {
+                    "${stringResource(Res.string.lt_default_server_name)} · ${stringResource(Res.string.lt_default_server_location)}"
+                }
             Text(
-                "The Meowery · Poland",
+                serverSubtitle,
                 style = typo().bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Text(

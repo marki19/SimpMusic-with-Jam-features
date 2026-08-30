@@ -724,8 +724,8 @@
     <string name="lt_credit_protocol">Listen Together protocol by Metrolist</string>
     <string name="lt_credit_compatible">Rooms are compatible with Metrolist clients</string>
     <string name="lt_server">Server</string>
-    <string name="lt_default_server_name" translatable="false">The Meowery</string>
-    <string name="lt_default_server_location" translatable="false">Poland · run by Nyx</string>
+    <string name="lt_default_server_name" translatable="false">Jam Server</string>
+    <string name="lt_default_server_location" translatable="false">Render · Cloud</string>
     <string name="lt_custom_server">Custom server</string>
     <string name="lt_custom_server_desc">Enter your own wss:// address</string>
     <string name="lt_save_server">Save server</string>

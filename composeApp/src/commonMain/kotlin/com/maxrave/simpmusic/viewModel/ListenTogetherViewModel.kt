@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -49,6 +50,12 @@ class ListenTogetherViewModel(
 
     val state: StateFlow<ListenTogetherRoom> =
         repository.room.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListenTogetherRoom())
+
+    val serverUrl: StateFlow<String> =
+        dataStore
+            .getString(ListenTogetherPrefs.SERVER_URL)
+            .map { it.orEmpty() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
     private val _displayName = MutableStateFlow("")
     val displayName: StateFlow<String> = _displayName.asStateFlow()
