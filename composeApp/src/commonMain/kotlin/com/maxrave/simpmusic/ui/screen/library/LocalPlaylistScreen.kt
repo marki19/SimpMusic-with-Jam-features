@@ -1559,18 +1559,6 @@ fun LocalPlaylistScreen(
             onAddToQueue = {
                 viewModel.addAllToQueue()
             },
-            onStartJam = {
-                val track = trackPagingItems.itemSnapshotList.items.firstOrNull()?.first?.toTrack()
-                navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
-                    initialVideoId = track?.videoId,
-                    initialTitle = track?.title,
-                    initialArtist = track?.artists?.firstOrNull()?.name,
-                    initialThumbnailUrl = track?.thumbnails?.lastOrNull()?.url,
-                    initialDurationMs = (track?.durationSeconds?.toLong() ?: 0L) * 1000L
-                )) {
-                    launchSingleTop = true
-                }
-            },
             onSync = {
                 if (uiState.syncState == LocalPlaylistEntity.YouTubeSyncState.Synced) {
                     showUnsyncAlertDialog = true

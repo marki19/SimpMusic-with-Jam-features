@@ -24,7 +24,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -32,7 +31,6 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -114,7 +112,6 @@ import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.logger.Logger
-import com.maxrave.simpmusic.ui.icon.Sensors
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.toggleMiniPlayer
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
@@ -164,15 +161,9 @@ fun MiniPlayer(
     modifier: Modifier,
     backdrop: PlatformBackdrop,
     sharedViewModel: SharedViewModel = koinInject(),
-    jamViewModel: com.marki19.simpmusic.viewModel.jam.JamViewModel = koinInject(),
     onClose: () -> Unit,
     onClick: () -> Unit,
-    onJamClick: () -> Unit = {},
 ) {
-    val jamSessionState by jamViewModel.sessionState.collectAsStateWithLifecycle()
-    val isJamActive = jamSessionState != null
-    val nowPlayingScreenData by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
-    val nowPlayingState by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     val isLiquidGlassEnabled by sharedViewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
@@ -253,20 +244,6 @@ fun MiniPlayer(
         }
 
     val coroutineScope = rememberCoroutineScope()
-
-    val displayTitle = songEntity?.title
-        ?: nowPlayingScreenData.nowPlayingTitle.takeIf { it.isNotBlank() }
-        ?: nowPlayingState?.mediaItem?.metadata?.title?.toString()
-        ?: ""
-
-    val displayArtist = songEntity?.artistName?.connectArtists()
-        ?: nowPlayingScreenData.artistName.takeIf { it.isNotBlank() }
-        ?: nowPlayingState?.mediaItem?.metadata?.artist?.toString()
-        ?: ""
-
-    val displayArtwork: Any? = songEntity?.thumbnails
-        ?: nowPlayingScreenData.thumbnailURL
-        ?: nowPlayingState?.mediaItem?.metadata?.artworkUri
 
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -456,7 +433,7 @@ fun MiniPlayer(
                                 model =
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
-                                        .data(displayArtwork)
+                                        .data(songEntity?.thumbnails)
                                         .crossfade(550)
                                         .build(),
                                 placeholder = rememberHolderPainter(),
@@ -477,11 +454,14 @@ fun MiniPlayer(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             AnimatedContent(
-                                targetState = displayTitle,
+                                targetState = songEntity,
                                 modifier = Modifier.weight(1F).fillMaxHeight(),
                                 contentAlignment = Alignment.CenterStart,
                                 transitionSpec = {
+                                    // Compare the incoming number with the previous number.
                                     if (targetState != initialState) {
+                                        // If the target number is larger, it slides up and fades in
+                                        // while the initial (smaller) number slides up and fades out.
                                         (
                                             slideInHorizontally { width ->
                                                 width
@@ -490,6 +470,8 @@ fun MiniPlayer(
                                             slideOutHorizontally { width -> +width } + fadeOut(),
                                         )
                                     } else {
+                                        // If the target number is smaller, it slides down and fades in
+                                        // while the initial number slides down and fades out.
                                         (
                                             slideInHorizontally { width ->
                                                 +width
@@ -498,18 +480,20 @@ fun MiniPlayer(
                                             slideOutHorizontally { width -> width } + fadeOut(),
                                         )
                                     }.using(
+                                        // Disable clipping since the faded slide-in/out should
+                                        // be displayed out of bounds.
                                         SizeTransform(clip = false),
                                     )
                                 },
                             ) { target ->
-                                if (target.isNotBlank()) {
+                                if (target != null) {
                                     Column(
                                         Modifier
                                             .wrapContentHeight()
                                             .align(Alignment.CenterVertically),
                                     ) {
                                         Text(
-                                            text = displayTitle,
+                                            text = (songEntity?.title ?: "").toString(),
                                             style = typo().labelSmall,
                                             color = textColor,
                                             maxLines = 1,
@@ -534,12 +518,13 @@ fun MiniPlayer(
                                                 )
                                             }
                                             Text(
-                                                text = displayArtist,
+                                                text = (songEntity?.artistName?.connectArtists() ?: ""),
                                                 style = typo().bodySmall,
                                                 maxLines = 1,
                                                 color = textColor,
                                                 modifier =
                                                     Modifier
+                                                        .weight(1f)
                                                         .wrapContentHeight(
                                                             align = Alignment.CenterVertically,
                                                         ).basicMarquee(
@@ -553,58 +538,28 @@ fun MiniPlayer(
                             }
                         }
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp)
-                    ) {
-                        HeartCheckBox(checked = liked, size = 28, tint = textColor) {
-                            sharedViewModel.onUIEvent(UIEvent.ToggleLike)
-                        }
-                        IconButton(
-                            onClick = onJamClick,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .drawBehind {
-                                    if (isJamActive) {
-                                        drawCircle(
-                                            brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                                                colors = listOf(Color(0xFF87CEEB).copy(alpha = 0.45f), Color(0xFF87CEEB).copy(alpha = 0.12f), Color.Transparent),
-                                                center = center,
-                                                radius = size.width / 2.0f
-                                            )
-                                        )
-                                    }
-                                }
-                        ) {
-                            Icon(
-                                imageVector = SimpIcons.Sensors,
-                                contentDescription = "Jam Session",
-                                tint = if (isJamActive) Color(0xFF87CEEB) else textColor,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Crossfade(targetState = loading, label = "") {
-                            if (it) {
-                                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        color = textColor,
-                                        strokeWidth = 3.dp,
-                                    )
-                                }
-                            } else {
-                                PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(36.dp), tint = textColor) {
-                                    if (isJamActive) {
-                                        if (isPlaying) jamViewModel.pause() else jamViewModel.play()
-                                    } else {
-                                        sharedViewModel.onUIEvent(UIEvent.PlayPause)
-                                    }
-                                }
+                    Spacer(modifier = Modifier.width(15.dp))
+                    HeartCheckBox(checked = liked, size = 30, tint = textColor) {
+                        sharedViewModel.onUIEvent(UIEvent.ToggleLike)
+                    }
+                    Spacer(modifier = Modifier.width(15.dp))
+                    Crossfade(targetState = loading, label = "") {
+                        if (it) {
+                            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = textColor,
+                                    strokeWidth = 3.dp,
+                                )
+                            }
+                        } else {
+                            PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(48.dp), tint = textColor) {
+                                sharedViewModel.onUIEvent(UIEvent.PlayPause)
                             }
                         }
-
                     }
+
+                    Spacer(modifier = Modifier.width(15.dp))
                 }
                 Box(
                     modifier =

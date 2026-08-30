@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import com.marki19.domain.jam.cleanId
-import com.maxrave.domain.utils.toTrack
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -935,23 +933,10 @@ fun QueueBottomSheet(
             skipPartiallyExpanded = true,
         )
     val lazyListState = rememberLazyListState()
-    val jamRepository = koinInject<com.marki19.domain.jam.JamRepository>()
-    val jamSession by jamRepository.sessionState.collectAsState(null)
-
     val dragDropState =
         rememberDragDropState(lazyListState) { from, to ->
             coroutineScope.launch {
-                val session = jamSession
-                if (session != null) {
-                    if (session.isHost || session.permissions.allowReorder) {
-                        val item = session.playbackState.queue.getOrNull(from)
-                        if (item != null && !item.isRecommendation) {
-                            jamRepository.sendCommand(com.marki19.domain.jam.JamCommand.MoveQueueItem(item.queueId, to))
-                        }
-                    }
-                } else {
-                    musicServiceHandler.swap(from, to)
-                }
+                musicServiceHandler.swap(from, to)
             }
         }
     var overscrollJob by remember { mutableStateOf<Job?>(null) }
@@ -962,36 +947,7 @@ fun QueueBottomSheet(
     val queueData by musicServiceHandler.queueData.collectAsStateWithLifecycle()
     val queue by remember {
         derivedStateOf {
-            val session = jamSession
-            if (session != null) {
-                val currentSongId = session.playbackState.currentSongId?.cleanId()
-                val fullQueue = session.playbackState.queue
-                val upcomingJamQueue = if (!currentSongId.isNullOrBlank()) {
-                    fullQueue.filter { it.videoId.cleanId() != currentSongId }
-                } else {
-                    fullQueue
-                }
-                upcomingJamQueue.map { jamItem ->
-                    com.maxrave.domain.data.model.browse.album.Track(
-                        album = null,
-                        artists = listOf(com.maxrave.domain.data.model.searchResult.songs.Artist(name = jamItem.artist, id = null)),
-                        duration = null,
-                        durationSeconds = (jamItem.durationMs / 1000L).toInt(),
-                        isAvailable = true,
-                        isExplicit = false,
-                        likeStatus = null,
-                        thumbnails = listOf(com.maxrave.domain.data.model.searchResult.songs.Thumbnail(width = 544, url = jamItem.thumbnailUrl ?: "", height = 544)),
-                        title = jamItem.title,
-                        videoId = jamItem.videoId,
-                        videoType = null,
-                        category = null,
-                        feedbackTokens = null,
-                        resultType = null
-                    )
-                }
-            } else {
-                queueData?.data?.listTracks ?: emptyList()
-            }
+            queueData?.data?.listTracks ?: emptyList()
         }
     }
     val loadMoreState by remember {
@@ -1240,16 +1196,7 @@ fun QueueBottomSheet(
                                             .fillMaxWidth(),
                                     onClickListener = { videoId ->
                                         if (videoId == track.videoId) {
-                                            val session = jamSession
-                                            if (session != null) {
-                                                if (session.isHost || session.permissions.allowSkip) {
-                                                    coroutineScope.launch {
-                                                        jamRepository.sendCommand(com.marki19.domain.jam.JamCommand.SkipTo(index))
-                                                    }
-                                                }
-                                            } else {
-                                                musicServiceHandler.playMediaItemInMediaSource(index)
-                                            }
+                                            musicServiceHandler.playMediaItemInMediaSource(index)
                                         }
                                     },
                                     onMoreClickListener = {
@@ -1465,12 +1412,9 @@ fun NowPlayingBottomSheet(
     onNavigateToOtherScreen: () -> Unit = {},
     onDelete: (() -> Unit)? = null,
     onLibraryDelete: (() -> Unit)? = null,
-    jamViewModel: com.marki19.simpmusic.viewModel.jam.JamViewModel = org.koin.compose.viewmodel.koinViewModel(),
-    sharedViewModel: com.maxrave.simpmusic.viewModel.SharedViewModel = org.koin.compose.koinInject(),
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val jamSessionState by jamViewModel.sessionState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(
@@ -1861,46 +1805,11 @@ fun NowPlayingBottomSheet(
                     ) {
                         viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.PlayNext)
                     }
-                    if (jamSessionState != null) {
-                        ActionButton(
-                            icon = SimpIcons.QueueMusic,
-                            text = null,
-                            textString = "Add to Jam Queue"
-                        ) {
-                            song?.toTrack()?.let { track ->
-                                jamViewModel.addToQueue(
-                                    videoId = track.videoId,
-                                    title = track.title,
-                                    artist = track.artists?.joinToString(", ") { it.name } ?: "Unknown Artist",
-                                    thumbnailUrl = track.thumbnails?.lastOrNull()?.url ?: "",
-                                    durationMs = (track.durationSeconds ?: 0).toLong() * 1000L
-                                )
-                                sharedViewModel.makeToast("Added ${track.title} to Jam Queue")
-                            }
-                            hideModalBottomSheet()
-                        }
-                    } else {
-                        ActionButton(
-                            icon = SimpIcons.QueueMusic,
-                            text = Res.string.add_to_queue,
-                        ) {
-                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
-                        }
-                        ActionButton(
-                            icon = SimpIcons.PeopleAlt,
-                            text = null,
-                            textString = "Start a Jam"
-                        ) {
-                            onNavigateToOtherScreen()
-                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
-                                initialVideoId = uiState.songUIState.videoId,
-                                initialTitle = uiState.songUIState.title,
-                                initialArtist = uiState.songUIState.listArtists.firstOrNull()?.name,
-                                initialThumbnailUrl = uiState.songUIState.thumbnails,
-                                initialDurationMs = 0L
-                            ))
-                            hideModalBottomSheet()
-                        }
+                    ActionButton(
+                        icon = SimpIcons.QueueMusic,
+                        text = Res.string.add_to_queue,
+                    ) {
+                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
                     }
                     ActionButton(
                         icon = SimpIcons.PeopleAlt,
@@ -2880,13 +2789,8 @@ fun PlaylistBottomSheet(
     onEditTitle: (newTitle: String) -> Unit = {},
     onSaveToLocal: () -> Unit,
     onAddToQueue: (() -> Unit)? = null,
-    onAddToJamQueue: (() -> Unit)? = null,
-    onStartJam: (() -> Unit)? = null,
     localPlaylistRepository: LocalPlaylistRepository = koinInject(),
 ) {
-    val jamViewModel: com.marki19.simpmusic.viewModel.jam.JamViewModel = koinInject()
-    val jamSessionState by jamViewModel.sessionState.collectAsState()
-    
     val coroutineScope = rememberCoroutineScope()
     var isSavedToLocal by remember { mutableStateOf(false) }
     val modelBottomSheetState =
@@ -2988,28 +2892,7 @@ fun PlaylistBottomSheet(
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(5.dp))
-                
-                if (onStartJam != null) {
-                    ActionButton(
-                        icon = SimpIcons.PeopleAlt,
-                        text = null,
-                        textString = "Start a Jam",
-                    ) {
-                        onStartJam()
-                        hideModalBottomSheet()
-                    }
-                }
-                
-                if (jamSessionState != null && onAddToJamQueue != null) {
-                    ActionButton(
-                        icon = SimpIcons.QueueMusic,
-                        text = null,
-                        textString = "Add to Jam Queue"
-                    ) {
-                        onAddToJamQueue()
-                        hideModalBottomSheet()
-                    }
-                } else if (jamSessionState == null && onAddToQueue != null) {
+                if (onAddToQueue != null) {
                     ActionButton(
                         icon = SimpIcons.QueueMusic,
                         text = Res.string.add_to_queue,
@@ -3062,7 +2945,6 @@ fun LocalPlaylistBottomSheet(
     onEditTitle: (newTitle: String) -> Unit,
     onEditThumbnail: (newThumbnailUri: String) -> Unit,
     onAddToQueue: () -> Unit,
-    onStartJam: (() -> Unit)? = null,
     onSync: () -> Unit,
     onUpdatePlaylist: () -> Unit,
     onDelete: () -> Unit,
@@ -3165,17 +3047,6 @@ fun LocalPlaylistBottomSheet(
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
-                    if (onStartJam != null) {
-                        ActionButton(
-                            icon = SimpIcons.PeopleAlt,
-                            text = null,
-                            textString = "Start a Jam",
-                        ) {
-                            onStartJam()
-                            hideModalBottomSheet()
-                        }
-                    }
-                    
                     ActionButton(icon = SimpIcons.Edit, text = Res.string.edit_title) {
                         showEditTitle = true
                     }

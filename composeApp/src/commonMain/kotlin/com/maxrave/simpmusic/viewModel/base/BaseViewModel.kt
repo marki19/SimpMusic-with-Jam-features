@@ -25,8 +25,6 @@ abstract class BaseViewModel :
     ViewModel(),
     KoinComponent {
     protected val mediaPlayerHandler: MediaPlayerHandler by inject<MediaPlayerHandler>()
-    open protected val jamRepository: com.marki19.domain.jam.JamRepository by inject()
-    protected val sharedViewModel: com.maxrave.simpmusic.viewModel.SharedViewModel by inject()
     private val _nowPlayingVideoId: MutableStateFlow<String> = MutableStateFlow("")
 
     /**
@@ -68,20 +66,6 @@ abstract class BaseViewModel :
         getNowPlayingVideoId()
     }
 
-    private fun getNowPlayingVideoId() {
-        viewModelScope.launch {
-            combine(mediaPlayerHandler.nowPlayingState, mediaPlayerHandler.controlState) { nowPlayingState, controlState ->
-                Pair(nowPlayingState, controlState)
-            }.collect { (nowPlayingState, controlState) ->
-                if (controlState.isPlaying) {
-                    _nowPlayingVideoId.value = nowPlayingState.songEntity?.videoId ?: ""
-                } else {
-                    _nowPlayingVideoId.value = ""
-                }
-            }
-        }
-    }
-
     fun makeToast(message: String?) {
         showToast(
             message = message ?: "NO MESSAGE",
@@ -108,6 +92,20 @@ abstract class BaseViewModel :
         _showLoadingDialog.value = false to getString(Res.string.loading)
     }
 
+    private fun getNowPlayingVideoId() {
+        viewModelScope.launch {
+            combine(mediaPlayerHandler.nowPlayingState, mediaPlayerHandler.controlState) { nowPlayingState, controlState ->
+                Pair(nowPlayingState, controlState)
+            }.collect { (nowPlayingState, controlState) ->
+                if (controlState.isPlaying) {
+                    _nowPlayingVideoId.value = nowPlayingState.songEntity?.videoId ?: ""
+                } else {
+                    _nowPlayingVideoId.value = ""
+                }
+            }
+        }
+    }
+
     /**
      * Communicate with SimpleMediaServiceHandler to load media item
      */
@@ -121,38 +119,16 @@ abstract class BaseViewModel :
         type: String,
         index: Int? = null,
     ) {
-        if (jamRepository.sessionState.value != null) {
-            sharedViewModel.requestPlaybackWithJamCheck {
-                viewModelScope.launch {
-                    mediaPlayerHandler.loadMediaItem(
-                        anyTrack = anyTrack,
-                        type = type,
-                        index = index,
-                    )
-                }
-            }
-        } else {
-            viewModelScope.launch {
-                mediaPlayerHandler.loadMediaItem(
-                    anyTrack = anyTrack,
-                    type = type,
-                    index = index,
-                )
-            }
+        viewModelScope.launch {
+            mediaPlayerHandler.loadMediaItem(
+                anyTrack = anyTrack,
+                type = type,
+                index = index,
+            )
         }
     }
 
     fun shufflePlaylist(firstPlayIndex: Int = 0) {
-        if (jamRepository.sessionState.value != null) {
-            sharedViewModel.requestPlaybackWithJamCheck {
-                mediaPlayerHandler.resetSongAndQueue()
-                viewModelScope.launch {
-                    mediaPlayerHandler.onPlayerEvent(com.maxrave.domain.mediaservice.handler.PlayerEvent.Stop)
-                    mediaPlayerHandler.shufflePlaylist(firstPlayIndex)
-                }
-            }
-        } else {
-            mediaPlayerHandler.shufflePlaylist(firstPlayIndex)
-        }
+        mediaPlayerHandler.shufflePlaylist(firstPlayIndex)
     }
 }

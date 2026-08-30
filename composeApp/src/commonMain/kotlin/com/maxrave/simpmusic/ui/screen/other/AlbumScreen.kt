@@ -1075,18 +1075,6 @@ fun AlbumScreen(
                         playlistName = uiState.title,
                         isYourYouTubePlaylist = false,
                         onSaveToLocal = {},
-                        onStartJam = {
-                            val track = uiState.listTrack.firstOrNull()
-                            navController.navigate(com.marki19.simpmusic.ui.navigation.destination.jam.JamMenuDestination(
-                                initialVideoId = track?.videoId,
-                                initialTitle = track?.title,
-                                initialArtist = track?.artists?.firstOrNull()?.name,
-                                initialThumbnailUrl = track?.thumbnails?.lastOrNull()?.url,
-                                initialDurationMs = (track?.durationSeconds?.toLong() ?: 0L) * 1000L
-                            )) {
-                                launchSingleTop = true
-                            }
-                        },
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
                                 uiState.listTrack.toCollection(arrayListOf()),
