@@ -276,6 +276,14 @@ fun MiniPlayer(
         }
     }
 
+    val nowPlayingScreenData by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
+    val miniPlayerArtworkUrl =
+        remember(songEntity?.thumbnails, songEntity?.videoId, nowPlayingScreenData.thumbnailURL) {
+            songEntity?.thumbnails?.takeIf { it != "null" && it.isNotBlank() }
+                ?: nowPlayingScreenData.thumbnailURL?.takeIf { it != "null" && it.isNotBlank() }
+                ?: songEntity?.videoId?.takeIf { it != "null" && it.isNotBlank() }?.let { "http://i.ytimg.com/vi/$it/hqdefault.jpg" }
+        }
+
     LaunchedEffect(Unit) {
         snapshotFlow { paletteState.palette }
             .distinctUntilChanged()
@@ -433,7 +441,7 @@ fun MiniPlayer(
                                 model =
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
-                                        .data(songEntity?.thumbnails)
+                                        .data(miniPlayerArtworkUrl)
                                         .crossfade(550)
                                         .build(),
                                 placeholder = rememberHolderPainter(),
@@ -739,7 +747,7 @@ fun MiniPlayer(
                             model =
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
-                                    .data(songEntity?.thumbnails)
+                                    .data(miniPlayerArtworkUrl)
                                     .crossfade(550)
                                     .build(),
                             placeholder = rememberHolderPainter(),
