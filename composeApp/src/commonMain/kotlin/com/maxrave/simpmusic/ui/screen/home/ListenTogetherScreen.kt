@@ -69,7 +69,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -121,8 +120,11 @@ import com.maxrave.domain.data.model.listentogether.ListenTogetherRoom
 import com.maxrave.domain.data.model.listentogether.RoomMember
 import com.maxrave.domain.data.model.listentogether.RoomSuggestion
 import com.maxrave.domain.data.model.listentogether.RoomTrack
+import com.maxrave.domain.data.model.searchResult.songs.Album
+import com.maxrave.domain.data.model.searchResult.songs.Artist
 import com.maxrave.domain.data.model.searchResult.songs.SongsResult
-import com.maxrave.domain.data.model.home.Track
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
+import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
@@ -133,27 +135,7 @@ import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
-import com.maxrave.simpmusic.ui.icon.Add
-import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
-import com.maxrave.simpmusic.ui.icon.Chat
-import com.maxrave.simpmusic.ui.icon.Check
-import com.maxrave.simpmusic.ui.icon.Close
-import com.maxrave.simpmusic.ui.icon.ContentCopy
-import com.maxrave.simpmusic.ui.icon.Delete
-import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
-import com.maxrave.simpmusic.ui.icon.Logout
-import com.maxrave.simpmusic.ui.icon.MoreVert
-import com.maxrave.simpmusic.ui.icon.Pause
-import com.maxrave.simpmusic.ui.icon.PlayArrow
-import com.maxrave.simpmusic.ui.icon.QueueMusic
-import com.maxrave.simpmusic.ui.icon.Search
-import com.maxrave.simpmusic.ui.icon.Send
-import com.maxrave.simpmusic.ui.icon.Settings
-import com.maxrave.simpmusic.ui.icon.Share
-import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.SkipNext
-import com.maxrave.simpmusic.ui.icon.SkipPrevious
-import com.maxrave.simpmusic.ui.icon.DragHandle
+import com.maxrave.simpmusic.ui.icon.*
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherSettingsDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.ListenTogetherViewModel
@@ -182,11 +164,12 @@ import simpmusic.composeapp.generated.resources.lt_waiting_approval
 import simpmusic.composeapp.generated.resources.lt_waiting_approval_desc
 import simpmusic.composeapp.generated.resources.lt_you
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 private val CARD_SHAPE = RoundedCornerShape(24.dp)
 private val ROW_SHAPE = RoundedCornerShape(18.dp)
 private const val TWO_COLUMN_MIN_DP = 760
-private const val COPIED_FEEDBACK_MS = 1400L
+private val COPIED_FEEDBACK_DURATION = 1400.milliseconds
 private const val SHARE_PREFIX = "Join my SimpMusic Jam with code "
 
 @Composable
@@ -222,6 +205,7 @@ fun ListenTogetherScreen(
     val isLoadingRecommendations by viewModel.isLoadingRecommendations.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
 
+    @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
     var managing by remember { mutableStateOf<RoomMember?>(null) }
     var showAllMembersDialog by remember { mutableStateOf(false) }
@@ -245,7 +229,7 @@ fun ListenTogetherScreen(
         toastIsError = isErr
         toastNotification = msg
         screenScope.launch {
-            delay(2800)
+            delay(2800.milliseconds)
             if (toastNotification == msg) {
                 toastNotification = null
             }
@@ -368,7 +352,6 @@ fun ListenTogetherScreen(
                             accountThumbUrl = accountThumbUrl,
                             codeInput = codeInput,
                             viewModel = viewModel,
-                            onManage = { managing = it },
                             onOpenAddSongs = { showAddSongSheet = true },
                             onShowToast = showToast,
                         )
@@ -402,7 +385,6 @@ fun ListenTogetherScreen(
                         accountThumbUrl = accountThumbUrl,
                         codeInput = codeInput,
                         viewModel = viewModel,
-                        onManage = { managing = it },
                         onOpenAddSongs = { showAddSongSheet = true },
                         onShowToast = showToast,
                     )
@@ -494,7 +476,6 @@ fun ListenTogetherScreen(
         JamChatSheet(
             state = state,
             selfUserId = state.selfUserId,
-            selfUsername = displayName,
             selfAvatar = accountThumbUrl,
             onSendMessage = { text, replyToId, replyToText, replyToSenderName ->
                 viewModel.sendChatMessage(text, replyToId, replyToText, replyToSenderName)
@@ -617,7 +598,6 @@ private fun ColumnScope.WorkArea(
     accountThumbUrl: String?,
     codeInput: String,
     viewModel: ListenTogetherViewModel,
-    onManage: (RoomMember) -> Unit,
     onOpenAddSongs: () -> Unit,
     onShowToast: (String, Boolean) -> Unit,
 ) {
@@ -627,7 +607,6 @@ private fun ColumnScope.WorkArea(
             JamNowPlayingCard(
                 track = state.currentTrack,
                 isPlaying = state.isPlaying,
-                positionMs = state.position,
                 canControlPlayback = state.isHost || state.permissions.allowPlayPause,
                 onPrevious = viewModel::skipPrevious,
                 onTogglePlayPause = viewModel::togglePlayPause,
@@ -731,7 +710,6 @@ private fun ColumnScope.WorkArea(
 private fun JamNowPlayingCard(
     track: RoomTrack?,
     isPlaying: Boolean,
-    positionMs: Long,
     canControlPlayback: Boolean,
     onPrevious: () -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -764,7 +742,7 @@ private fun JamNowPlayingCard(
                             model =
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
-                                    .data(track?.thumbnail)
+                                    .data(track.thumbnail)
                                     .crossfade(true)
                                     .build(),
                             contentDescription = null,
@@ -784,7 +762,7 @@ private fun JamNowPlayingCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = track?.artist?.ifBlank { "Jam session is active" } ?: "Add songs to start listening",
+                        text = track?.artist.orEmpty().ifBlank { "Jam session is active" },
                         style = typo().bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -921,15 +899,13 @@ private fun JamQueueSection(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             itemsIndexed(queue, key = { index, track -> track.id + "_$index" }) { index, track ->
-                ReorderableItem(reorderableState, key = track.id + "_$index") { isDragging ->
+                ReorderableItem(reorderableState, key = track.id + "_$index") { _ ->
                     SwipeableQueueCard(
                         track = track,
-                        index = index,
                         canReorder = canReorder,
-                        dragModifier = Modifier.draggableHandle(),
                         onRemove = { onRemove(index, track) },
                         onRequeue = { onRequeue(track) },
-                        onMoveUp = { onReorder(index, index - 1) },
+                        dragModifier = Modifier.draggableHandle(),
                     )
                 }
             }
@@ -940,12 +916,11 @@ private fun JamQueueSection(
 @Composable
 private fun SwipeableQueueCard(
     track: RoomTrack,
-    index: Int,
     canReorder: Boolean,
-    dragModifier: Modifier = Modifier,
     onRemove: () -> Unit,
     onRequeue: () -> Unit,
-    onMoveUp: () -> Unit,
+    modifier: Modifier = Modifier,
+    dragModifier: Modifier = Modifier,
 ) {
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -959,7 +934,7 @@ private fun SwipeableQueueCard(
 
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clip(CARD_SHAPE),
     ) {
@@ -1145,7 +1120,7 @@ private fun AddSongToJamSheet(
     fun triggerQueueToast(trackTitle: String) {
         queuedNotification = "Added \"$trackTitle\" to Jam queue"
         scope.launch {
-            delay(2200)
+            delay(2200.milliseconds)
             if (queuedNotification?.contains(trackTitle) == true) {
                 queuedNotification = null
             }
@@ -1307,7 +1282,7 @@ private fun AddSongToJamSheet(
                                         }
                                     }
                                     SongFullWidthItems(
-                                        track = track,
+                                        track = track.toTrack(),
                                         isPlaying = false,
                                         modifier = Modifier,
                                         onAddToQueue = { _ ->
@@ -1396,7 +1371,6 @@ private fun AddSongToJamSheet(
 private fun JamChatSheet(
     state: ListenTogetherRoom,
     selfUserId: String,
-    selfUsername: String,
     selfAvatar: String?,
     onSendMessage: (text: String, replyToId: String?, replyToText: String?, replyToSenderName: String?) -> Unit,
     onReact: (messageId: String, emoji: String) -> Unit,
@@ -1519,7 +1493,6 @@ private fun JamChatSheet(
                         onReact(targetId, emoji)
                         reactingMessageId = null
                     },
-                    onDismiss = { reactingMessageId = null },
                 )
             }
 
@@ -1771,7 +1744,6 @@ private fun ChatMessageBubble(
 @Composable
 private fun EmojiReactionSelector(
     onSelect: (String) -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val emojis = listOf("❤️", "👍", "🔥", "😂", "😮", "😢", "🎉")
     Row(
@@ -1978,35 +1950,6 @@ private fun Avatar(
                 color = Color.White,
             )
         }
-    }
-}
-
-@Composable
-private fun Chip(
-    text: String,
-    filled: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .height(36.dp)
-                .clip(CircleShape)
-                .then(
-                    if (filled) {
-                        Modifier.background(MaterialTheme.colorScheme.primary)
-                    } else {
-                        Modifier.border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), CircleShape)
-                    },
-                ).clickable { onClick() }
-                .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text,
-            style = typo().labelMedium.copy(fontWeight = if (filled) FontWeight.Bold else FontWeight.Normal),
-            color = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -2348,7 +2291,7 @@ private fun RoomCodePoster(
                 var copied by remember { mutableStateOf(false) }
                 LaunchedEffect(copied) {
                     if (copied) {
-                        delay(COPIED_FEEDBACK_MS)
+                        delay(COPIED_FEEDBACK_DURATION)
                         copied = false
                     }
                 }
@@ -2618,3 +2561,21 @@ private fun WaitingForApproval(
         }
     }
 }
+
+private fun RoomTrack.toTrack(): Track =
+    Track(
+        videoId = id,
+        title = title,
+        artists = if (artist.isNotBlank()) listOf(Artist(name = artist, id = null)) else null,
+        album = if (album.isNotBlank()) Album(name = album, id = "") else null,
+        duration = null,
+        durationSeconds = (durationMs / 1000L).toInt(),
+        isAvailable = true,
+        isExplicit = false,
+        likeStatus = null,
+        thumbnails = if (thumbnail.isNotBlank()) listOf(Thumbnail(url = thumbnail, width = 0, height = 0)) else null,
+        videoType = null,
+        category = null,
+        feedbackTokens = null,
+        resultType = null,
+    )
