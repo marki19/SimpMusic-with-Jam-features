@@ -106,6 +106,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -1690,10 +1691,10 @@ private fun ChatMessageBubble(
             modifier
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .pointerInput(Unit) {
+                .pointerInput(isSelf) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            if (offsetX.value > 60f) {
+                            if (abs(offsetX.value) >= 50f) {
                                 onReply()
                             }
                             scope.launch { offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
@@ -1703,7 +1704,12 @@ private fun ChatMessageBubble(
                         },
                         onHorizontalDrag = { _, dragAmount ->
                             scope.launch {
-                                val next = (offsetX.value + dragAmount).coerceIn(0f, 100f)
+                                val next =
+                                    if (isSelf) {
+                                        (offsetX.value + dragAmount).coerceIn(-100f, 0f)
+                                    } else {
+                                        (offsetX.value + dragAmount).coerceIn(0f, 100f)
+                                    }
                                 offsetX.snapTo(next)
                             }
                         },
@@ -1751,7 +1757,7 @@ private fun ChatMessageBubble(
                                 bottomEnd = 18.dp,
                             ),
                         ).combinedClickable(
-                            onClick = onReply,
+                            onClick = {},
                             onLongClick = onLongPress,
                         ).background(
                             if (isSelf) {
