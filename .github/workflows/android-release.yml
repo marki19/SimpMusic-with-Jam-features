@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - 'main'
+    tags:
+      - 'v*'
     paths-ignore:
       - 'README.md'
       - 'fastlane/**'
@@ -127,3 +129,49 @@ jobs:
         with:
           name: app-foss-release
           path: androidApp/build/outputs/apk/release/*.apk
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-full-release, build-foss-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read app version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(grep '^version-name' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+            echo "version=v$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Full Release APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: app-full-release
+          path: release-apks
+
+      - name: Download FOSS Release APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: app-foss-release
+          path: release-apks
+
+      - name: List Release Files
+        run: ls -lh release-apks/
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: SimpMusic ${{ steps.version.outputs.version }}
+          files: release-apks/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
