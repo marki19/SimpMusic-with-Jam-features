@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Screen state for Jam.
@@ -98,7 +99,7 @@ class ListenTogetherViewModel(
                 .distinctUntilChanged()
                 .filter { it }
                 .collectLatest {
-                    delay(500)
+                    delay(500.milliseconds)
                     val allowQueue = dataStore.getString(ListenTogetherPrefs.JAM_ALLOW_QUEUE).first()?.equals(ListenTogetherPrefs.TRUE, true) ?: true
                     val allowReorder = dataStore.getString(ListenTogetherPrefs.JAM_ALLOW_REORDER).first()?.equals(ListenTogetherPrefs.TRUE, true) ?: false
                     val allowPlayDirect = dataStore.getString(ListenTogetherPrefs.JAM_ALLOW_PLAY_DIRECT).first()?.equals(ListenTogetherPrefs.TRUE, true) ?: false
