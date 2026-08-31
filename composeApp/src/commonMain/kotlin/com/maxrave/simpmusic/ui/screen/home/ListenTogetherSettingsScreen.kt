@@ -101,6 +101,7 @@ fun ListenTogetherSettingsScreen(
     val jamAllowPlayDirect by viewModel.jamAllowPlayDirect.collectAsStateWithLifecycle()
     val jamAllowSeek by viewModel.jamAllowSeek.collectAsStateWithLifecycle()
     val jamAllowPlayPause by viewModel.jamAllowPlayPause.collectAsStateWithLifecycle()
+    val jamAutoplay by viewModel.jamAutoplay.collectAsStateWithLifecycle()
 
     val backdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
@@ -177,6 +178,12 @@ fun ListenTogetherSettingsScreen(
                             subtitle = stringResource(Res.string.lt_auto_approve_joins_desc),
                             checked = autoJoins,
                             onCheckedChange = { viewModel.setAutoApproveJoins(it) },
+                        )
+                        ToggleRow(
+                            title = "Autoplay similar songs",
+                            subtitle = "Automatically add similar tracks to the queue when music runs out",
+                            checked = jamAutoplay,
+                            onCheckedChange = { viewModel.setJamAutoplay(it) },
                         )
                     }
                 }

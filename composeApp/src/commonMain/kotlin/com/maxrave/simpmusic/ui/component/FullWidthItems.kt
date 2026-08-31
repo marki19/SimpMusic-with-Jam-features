@@ -152,7 +152,7 @@ fun SongFullWidthItems(
     var heightDp by remember { mutableStateOf(0.dp) }
 
     Box(
-        modifier = modifier.background(if (onAddToQueue != null) MaterialTheme.colorScheme.primary else Color.Transparent),
+        modifier = modifier.fillMaxWidth().background(if (onAddToQueue != null && offsetX.value > 0f) MaterialTheme.colorScheme.primary else Color.Transparent),
     ) {
         Crossfade(
             offsetX.value >= maxOffset / 2,
@@ -178,7 +178,8 @@ fun SongFullWidthItems(
         val itemVideoId = track?.videoId ?: songEntity?.videoId ?: ""
         Box(
             modifier =
-                modifier
+                Modifier
+                    .fillMaxWidth()
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .background(
                         if (isSelected) seed.copy(alpha = 0.18f) else Color.Transparent,

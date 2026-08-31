@@ -448,6 +448,7 @@ fun ListenTogetherScreen(
             isSearching = isSearching,
             searchResults = searchResults,
             recommendedSongs = recommendedSongs,
+            queuedTrackIds = state.queue.map { it.id }.toSet(),
             isLoadingRecommendations = isLoadingRecommendations,
             canPlayDirect = state.isHost || state.permissions.allowPlayDirect,
             onQueryChange = viewModel::onSearchQueryChange,
@@ -603,6 +604,8 @@ private fun ColumnScope.WorkArea(
 ) {
     when {
         state.inRoom -> {
+            val jamAutoplay by viewModel.jamAutoplay.collectAsStateWithLifecycle()
+
             // 1. Now Playing in Jam (Mini player with duration line, previous, play/pause, next)
             JamNowPlayingCard(
                 track = state.currentTrack,
@@ -630,9 +633,12 @@ private fun ColumnScope.WorkArea(
             // 2. Jam Queue Section (with swipe to re-queue / remove)
             JamQueueSection(
                 queue = state.queue,
+                isHost = state.isHost,
+                jamAutoplay = jamAutoplay,
                 canQueue = state.isHost || state.permissions.allowQueue,
                 canReorder = state.isHost || state.permissions.allowReorder,
                 onAddClick = onOpenAddSongs,
+                onToggleAutoplay = { viewModel.setJamAutoplay(!jamAutoplay) },
                 onReorder = { from, to -> viewModel.reorderJamQueue(from, to) },
                 onRequeue = { track ->
                     viewModel.addSongToJam(track)
@@ -831,9 +837,12 @@ private fun JamNowPlayingCard(
 @Composable
 private fun JamQueueSection(
     queue: List<RoomTrack>,
+    isHost: Boolean = false,
+    jamAutoplay: Boolean = true,
     canQueue: Boolean,
     canReorder: Boolean,
     onAddClick: () -> Unit,
+    onToggleAutoplay: () -> Unit = {},
     onReorder: (Int, Int) -> Unit,
     onRequeue: (RoomTrack) -> Unit,
     onRemove: (Int, RoomTrack) -> Unit,
@@ -843,7 +852,38 @@ private fun JamQueueSection(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        SectionHeader("Jam Queue", queue.size)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SectionHeader("Jam Queue", queue.size)
+            if (isHost) {
+                Surface(
+                    onClick = onToggleAutoplay,
+                    shape = CircleShape,
+                    color = if (jamAutoplay) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.padding(start = 2.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            "Autoplay",
+                            style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                            color = if (jamAutoplay) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (jamAutoplay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                        )
+                    }
+                }
+            }
+        }
         if (canQueue) {
             FilledTonalButton(
                 onClick = onAddClick,
@@ -1103,6 +1143,7 @@ private fun AddSongToJamSheet(
     isSearching: Boolean,
     searchResults: List<SongsResult>,
     recommendedSongs: List<RoomTrack>,
+    queuedTrackIds: Set<String> = emptySet(),
     isLoadingRecommendations: Boolean,
     canPlayDirect: Boolean,
     onQueryChange: (String) -> Unit,
@@ -1233,10 +1274,36 @@ private fun AddSongToJamSheet(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(searchResults, key = { it.videoId }) { song ->
+                                val isQueued = song.videoId in queuedTrackIds
                                 SongFullWidthItems(
                                     track = song.toTrack(),
                                     isPlaying = false,
                                     modifier = Modifier,
+                                    rightView = if (isQueued) {
+                                        {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                modifier =
+                                                    Modifier
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            ) {
+                                                Icon(
+                                                    SimpIcons.Check,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(13.dp),
+                                                )
+                                                Text(
+                                                    "Queued",
+                                                    style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                        }
+                                    } else null,
                                     onAddToQueue = { _ ->
                                         onQueueSongResult(song)
                                         triggerQueueToast(song.title.orEmpty())
@@ -1281,10 +1348,36 @@ private fun AddSongToJamSheet(
                                             onLoadMoreRecommendations()
                                         }
                                     }
+                                    val isQueued = track.id in queuedTrackIds
                                     SongFullWidthItems(
                                         track = track.toTrack(),
                                         isPlaying = false,
                                         modifier = Modifier,
+                                        rightView = if (isQueued) {
+                                            {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier =
+                                                        Modifier
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                ) {
+                                                    Icon(
+                                                        SimpIcons.Check,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(13.dp),
+                                                    )
+                                                    Text(
+                                                        "Queued",
+                                                        style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                }
+                                            }
+                                        } else null,
                                         onAddToQueue = { _ ->
                                             onQueueTrack(track)
                                             triggerQueueToast(track.title)

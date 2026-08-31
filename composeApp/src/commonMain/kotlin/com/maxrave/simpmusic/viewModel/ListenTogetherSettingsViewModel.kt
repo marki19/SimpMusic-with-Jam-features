@@ -31,6 +31,7 @@ class ListenTogetherSettingsViewModel(
     val jamAllowPlayDirect: StateFlow<Boolean> = boolFlow(KEY_JAM_ALLOW_PLAY_DIRECT, default = false)
     val jamAllowSeek: StateFlow<Boolean> = boolFlow(KEY_JAM_ALLOW_SEEK, default = false)
     val jamAllowPlayPause: StateFlow<Boolean> = boolFlow(KEY_JAM_ALLOW_PLAY_PAUSE, default = false)
+    val jamAutoplay: StateFlow<Boolean> = boolFlow(KEY_JAM_AUTOPLAY, default = true)
 
     val blockedNames: StateFlow<List<String>> =
         dataStore
@@ -68,6 +69,8 @@ class ListenTogetherSettingsViewModel(
         putBool(KEY_JAM_ALLOW_PLAY_PAUSE, value)
         syncLivePermissions(allowPlayPause = value)
     }
+
+    fun setJamAutoplay(value: Boolean) = putBool(KEY_JAM_AUTOPLAY, value)
 
     fun leaveRoom() {
         repository.leaveRoom()
@@ -127,6 +130,7 @@ class ListenTogetherSettingsViewModel(
         const val KEY_JAM_ALLOW_PLAY_DIRECT = ListenTogetherPrefs.JAM_ALLOW_PLAY_DIRECT
         const val KEY_JAM_ALLOW_SEEK = ListenTogetherPrefs.JAM_ALLOW_SEEK
         const val KEY_JAM_ALLOW_PLAY_PAUSE = ListenTogetherPrefs.JAM_ALLOW_PLAY_PAUSE
+        const val KEY_JAM_AUTOPLAY = ListenTogetherPrefs.JAM_AUTOPLAY
 
         private const val TRUE = ListenTogetherPrefs.TRUE
         private const val FALSE = ListenTogetherPrefs.FALSE

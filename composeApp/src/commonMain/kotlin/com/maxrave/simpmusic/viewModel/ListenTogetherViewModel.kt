@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -129,10 +131,64 @@ class ListenTogetherViewModel(
                 repository.autoApproveSuggestions = it == ListenTogetherPrefs.TRUE
             }
         }
+
+        // Jam Autoplay monitor (when Host has Autoplay ON and queue is running low)
+        viewModelScope.launch {
+            var isFetchingAutoplay = false
+            var lastAutoplayTrackId: String? = null
+            combine(
+                repository.room.map { Triple(it.inRoom && it.isHost, it.currentTrack?.id, it.queue.size) }.distinctUntilChanged(),
+                dataStore.getString(ListenTogetherPrefs.JAM_AUTOPLAY).map { it?.equals(ListenTogetherPrefs.TRUE, true) ?: true },
+            ) { (isHostInRoom, currentTrackId, queueSize), autoplayEnabled ->
+                if (!isHostInRoom || !autoplayEnabled || currentTrackId.isNullOrBlank()) return@combine
+                if (queueSize <= 1 && !isFetchingAutoplay && lastAutoplayTrackId != currentTrackId) {
+                    isFetchingAutoplay = true
+                    lastAutoplayTrackId = currentTrackId
+                    try {
+                        songRepository.getRelatedData(currentTrackId).collect { resource ->
+                            if (resource is Resource.Success) {
+                                val currentQueueIds = repository.room.value.queue.map { it.id }.toSet()
+                                val candidates = resource.data?.first.orEmpty()
+                                    .filter { it.videoId != currentTrackId && it.videoId !in currentQueueIds }
+                                    .take(4)
+                                candidates.forEach { track ->
+                                    addSongToJam(
+                                        RoomTrack(
+                                            id = track.videoId,
+                                            title = track.title,
+                                            artist = track.artists?.joinToString(", ") { a -> a.name }.orEmpty(),
+                                            album = track.album?.name.orEmpty(),
+                                            durationMs = (track.durationSeconds?.toLong() ?: 0L) * 1000L,
+                                            thumbnail = track.thumbnails?.lastOrNull()?.url.orEmpty(),
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        com.maxrave.logger.Logger.e("JamAutoplay", "Failed to fetch autoplay recommendations: ${e.message}")
+                    } finally {
+                        isFetchingAutoplay = false
+                    }
+                }
+            }.collect()
+        }
     }
 
     val state: StateFlow<ListenTogetherRoom> =
         repository.room.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListenTogetherRoom())
+
+    val jamAutoplay: StateFlow<Boolean> =
+        dataStore
+            .getString(ListenTogetherPrefs.JAM_AUTOPLAY)
+            .map { it?.equals(ListenTogetherPrefs.TRUE, true) ?: true }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setJamAutoplay(value: Boolean) {
+        viewModelScope.launch {
+            dataStore.putString(ListenTogetherPrefs.JAM_AUTOPLAY, if (value) ListenTogetherPrefs.TRUE else ListenTogetherPrefs.FALSE)
+        }
+    }
 
     val serverUrl: StateFlow<String> =
         dataStore
