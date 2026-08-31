@@ -406,6 +406,31 @@ class SharedViewModel(
                     }
                 }
         }
+        // A second collector tracks changes to the song entity's *content* (thumbnail, title,
+        // like status) within the same track. The primary collector above uses
+        // `distinctUntilChangedBy { videoId }` to run expensive side-effects (canvas, format,
+        // scrobbling) exactly once per track, but that filter suppresses any further emissions
+        // for the same videoId — including the DB-populated songEntity that arrives later.
+        // For Jam rooms in particular, `onMediaItemTransition` first emits a stub SongEntity
+        // built from the media-item metadata (no proper thumbnail), then overwrites it once the
+        // DB lookup or the room-track thumbnail is resolved. Without this second path, the
+        // mini-player cover art stays stuck on the previous song's image because the stub's
+        // videoId already matches and the corrected update is dropped.
+        viewModelScope.launch {
+            mediaPlayerHandler.nowPlayingState
+                .distinctUntilChangedBy { it.songEntity?.thumbnails }
+                .collect { state ->
+                    val current = _nowPlayingState.value ?: return@collect
+                    // Only update the songEntity — the primary collector owns everything else.
+                    // Guard: only apply if this belongs to the same track the UI is showing.
+                    if (state.songEntity?.videoId == current.songEntity?.videoId &&
+                        state.songEntity?.thumbnails != current.songEntity?.thumbnails
+                    ) {
+                        _nowPlayingState.value = current.copy(songEntity = state.songEntity)
+                    }
+                }
+        }
+
         viewModelScope.launch {
             val job1 =
                 launch {
@@ -1754,6 +1779,23 @@ class SharedViewModel(
 
     fun addListToQueue(listTrack: ArrayList<Track>) {
         viewModelScope.launch {
+            val roomState = listenTogetherRepository.room.value
+            if (roomState.inRoom) {
+                val canControl = roomState.isHost || roomState.permissions.allowQueue
+                if (!canControl) {
+                    makeToast("You don't have permission to add to the Jam queue.")
+                    return@launch
+                }
+                listTrack.forEach { track ->
+                    val roomTrack = track.toRoomTrack()
+                    if (roomTrack != null) {
+                        listenTogetherRepository.addToQueue(roomTrack)
+                    }
+                }
+                makeToast(getString(Res.string.added_to_queue))
+                return@launch
+            }
+
             if (listTrack.size == 1 && dataStoreManager.endlessQueue.first() == TRUE) {
                 mediaPlayerHandler.playNext(listTrack.first())
                 makeToast(getString(Res.string.play_next))

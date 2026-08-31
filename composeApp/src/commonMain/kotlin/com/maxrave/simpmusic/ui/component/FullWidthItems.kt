@@ -152,8 +152,7 @@ fun SongFullWidthItems(
     var heightDp by remember { mutableStateOf(0.dp) }
 
     Box(
-        modifier =
-        modifier,
+        modifier = modifier.background(if (onAddToQueue != null) MaterialTheme.colorScheme.primary else Color.Transparent),
     ) {
         Crossfade(
             offsetX.value >= maxOffset / 2,
@@ -169,7 +168,7 @@ fun SongFullWidthItems(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        tint = contentColor,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         imageVector = SimpIcons.QueueMusic,
                         contentDescription = stringResource(Res.string.add_to_queue),
                     )

@@ -187,12 +187,16 @@ val viewModelModule =
             )
         }
         viewModel {
-            ListenTogetherSettingsViewModel(get())
+            ListenTogetherSettingsViewModel(get(), get())
         }
         viewModel {
             ListenTogetherViewModel(
                 repository = get(),
                 dataStore = get(),
+                searchRepository = get(),
+                songRepository = get(),
+                homeRepository = get(),
+                mediaPlayerHandler = get(),
                 bridge = get(),
             )
         }

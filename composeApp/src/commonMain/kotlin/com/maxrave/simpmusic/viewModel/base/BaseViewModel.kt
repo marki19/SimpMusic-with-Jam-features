@@ -2,8 +2,15 @@ package com.maxrave.simpmusic.viewModel.base
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.data.model.home.Content
+import com.maxrave.domain.data.model.listentogether.RoomTrack
+import com.maxrave.domain.data.model.searchResult.songs.SongsResult
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.repository.ListenTogetherRepository
 import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.cancel
@@ -22,9 +29,10 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.loading
 
 abstract class BaseViewModel :
-    ViewModel(),
+    androidx.lifecycle.ViewModel(),
     KoinComponent {
     protected val mediaPlayerHandler: MediaPlayerHandler by inject<MediaPlayerHandler>()
+    protected val listenTogetherRepository: ListenTogetherRepository by inject<ListenTogetherRepository>()
     private val _nowPlayingVideoId: MutableStateFlow<String> = MutableStateFlow("")
 
     /**
@@ -110,6 +118,23 @@ abstract class BaseViewModel :
      * Communicate with SimpleMediaServiceHandler to load media item
      */
     fun setQueueData(queueData: QueueData.Data) {
+        val roomState = listenTogetherRepository.room.value
+        if (roomState.inRoom) {
+            val canControl = roomState.isHost || roomState.permissions.allowQueue
+            if (!canControl) {
+                makeToast("You don't have permission to change music in this Jam room.")
+                return
+            }
+            if (!roomState.isHost) {
+                val roomTrack = queueData.firstPlayedTrack?.toRoomTrack()
+                if (roomTrack != null) {
+                    listenTogetherRepository.playTrackDirect(roomTrack)
+                    makeToast("Playing track in Jam room.")
+                }
+                return
+            }
+        }
+
         mediaPlayerHandler.reset()
         mediaPlayerHandler.setQueueData(queueData)
     }
@@ -120,11 +145,74 @@ abstract class BaseViewModel :
         index: Int? = null,
     ) {
         viewModelScope.launch {
+            val roomState = listenTogetherRepository.room.value
+            if (roomState.inRoom) {
+                val canControl = roomState.isHost || roomState.permissions.allowPlayDirect
+                if (!canControl) {
+                    makeToast("You don't have permission to play music in this Jam room.")
+                    return@launch
+                }
+                if (!roomState.isHost) {
+                    val roomTrack = anyTrack.toRoomTrack()
+                    if (roomTrack != null) {
+                        listenTogetherRepository.playTrackDirect(roomTrack)
+                        return@launch
+                    }
+                }
+            }
+
             mediaPlayerHandler.loadMediaItem(
                 anyTrack = anyTrack,
                 type = type,
                 index = index,
             )
+        }
+    }
+
+    private fun parseDurationToMs(durationStr: String): Long {
+        val parts = durationStr.split(":")
+        var seconds = 0L
+        for (part in parts) {
+            seconds = seconds * 60 + part.toLong()
+        }
+        return seconds * 1000L
+    }
+
+    protected fun Any?.toRoomTrack(): RoomTrack? {
+        return when (this) {
+            is SongEntity -> RoomTrack(
+                id = videoId,
+                title = title,
+                artist = artistName?.joinToString(", ").orEmpty(),
+                album = albumName.orEmpty(),
+                durationMs = durationSeconds.toLong() * 1000L,
+                thumbnail = thumbnails.orEmpty(),
+            )
+            is SongsResult -> RoomTrack(
+                id = videoId,
+                title = title ?: "",
+                artist = artists?.joinToString(", ") { it.name }.orEmpty(),
+                album = album?.name.orEmpty(),
+                durationMs = (durationSeconds?.toLong()?.times(1000L)) ?: (duration?.let { parseDurationToMs(it) } ?: 0L),
+                thumbnail = thumbnails?.lastOrNull()?.url ?: "",
+            )
+            is Track -> RoomTrack(
+                id = videoId,
+                title = title,
+                artist = artists?.joinToString(", ") { it.name }.orEmpty(),
+                album = album?.name.orEmpty(),
+                durationMs = durationSeconds?.toLong()?.times(1000L) ?: 0L,
+                thumbnail = thumbnails?.lastOrNull()?.url ?: "",
+            )
+            is Content -> RoomTrack(
+                id = videoId ?: "",
+                title = title,
+                artist = artists?.joinToString(", ") { it.name }.orEmpty(),
+                album = album?.name.orEmpty(),
+                durationMs = 0L,
+                thumbnail = thumbnails.lastOrNull()?.url ?: "",
+            )
+            else -> null
         }
     }
 

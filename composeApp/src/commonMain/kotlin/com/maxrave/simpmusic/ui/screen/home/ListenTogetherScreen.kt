@@ -2,15 +2,23 @@ package com.maxrave.simpmusic.ui.screen.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -25,58 +33,97 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import kotlin.math.roundToInt
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.model.listentogether.JamChatMessage
 import com.maxrave.domain.data.model.listentogether.ListenTogetherRoom
-import com.maxrave.domain.data.model.listentogether.RoomConnection
-import com.maxrave.domain.data.model.listentogether.RoomJoinRequest
 import com.maxrave.domain.data.model.listentogether.RoomMember
 import com.maxrave.domain.data.model.listentogether.RoomSuggestion
+import com.maxrave.domain.data.model.listentogether.RoomTrack
+import com.maxrave.domain.data.model.searchResult.songs.SongsResult
+import com.maxrave.domain.data.model.home.Track
+import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
@@ -84,38 +131,41 @@ import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.rgbFactor
-import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
+import com.maxrave.simpmusic.ui.component.SongFullWidthItems
+import com.maxrave.simpmusic.ui.icon.Add
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
-import com.maxrave.simpmusic.ui.icon.ArrowForwardIos
+import com.maxrave.simpmusic.ui.icon.Chat
 import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.ContentCopy
+import com.maxrave.simpmusic.ui.icon.Delete
+import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
 import com.maxrave.simpmusic.ui.icon.Logout
+import com.maxrave.simpmusic.ui.icon.MoreVert
+import com.maxrave.simpmusic.ui.icon.Pause
+import com.maxrave.simpmusic.ui.icon.PlayArrow
+import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.Search
+import com.maxrave.simpmusic.ui.icon.Send
 import com.maxrave.simpmusic.ui.icon.Settings
 import com.maxrave.simpmusic.ui.icon.Share
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.SkipNext
+import com.maxrave.simpmusic.ui.icon.SkipPrevious
+import com.maxrave.simpmusic.ui.icon.DragHandle
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherSettingsDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.ListenTogetherViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.listen_together
 import simpmusic.composeapp.generated.resources.lt_background_warning
-import simpmusic.composeapp.generated.resources.lt_block
-import simpmusic.composeapp.generated.resources.lt_block_desc
 import simpmusic.composeapp.generated.resources.lt_cancel_join
-import simpmusic.composeapp.generated.resources.lt_connect
-import simpmusic.composeapp.generated.resources.lt_connected
-import simpmusic.composeapp.generated.resources.lt_connecting
 import simpmusic.composeapp.generated.resources.lt_create_room
-import simpmusic.composeapp.generated.resources.lt_credit_compatible
-import simpmusic.composeapp.generated.resources.lt_credit_protocol
-import simpmusic.composeapp.generated.resources.lt_default_server_location
-import simpmusic.composeapp.generated.resources.lt_default_server_name
-import simpmusic.composeapp.generated.resources.lt_disconnect
 import simpmusic.composeapp.generated.resources.lt_display_name
 import simpmusic.composeapp.generated.resources.lt_display_name_hint
 import simpmusic.composeapp.generated.resources.lt_host_badge
@@ -123,50 +173,29 @@ import simpmusic.composeapp.generated.resources.lt_in_room
 import simpmusic.composeapp.generated.resources.lt_join_requests
 import simpmusic.composeapp.generated.resources.lt_join_room
 import simpmusic.composeapp.generated.resources.lt_just_asked
-import simpmusic.composeapp.generated.resources.lt_kick
-import simpmusic.composeapp.generated.resources.lt_kick_desc
 import simpmusic.composeapp.generated.resources.lt_leave_room
-import simpmusic.composeapp.generated.resources.lt_not_connected
 import simpmusic.composeapp.generated.resources.lt_or_join_with_code
 import simpmusic.composeapp.generated.resources.lt_room_code
 import simpmusic.composeapp.generated.resources.lt_suggestions
 import simpmusic.composeapp.generated.resources.lt_tagline
-import simpmusic.composeapp.generated.resources.lt_transfer_host
-import simpmusic.composeapp.generated.resources.lt_transfer_host_desc
 import simpmusic.composeapp.generated.resources.lt_waiting_approval
 import simpmusic.composeapp.generated.resources.lt_waiting_approval_desc
 import simpmusic.composeapp.generated.resources.lt_you
-import simpmusic.composeapp.generated.resources.settings
+import kotlin.math.roundToInt
 
-/**
- * Listen Together.
- *
- * Colour, type and surface all come from the app's own system — `MaterialTheme.colorScheme`,
- * `typo()`, the colour scheme, and the liquid-glass treatment the Analytics screen uses — rather than a
- * palette of hard-coded hexes. The first version of this screen invented its own #0F1319 dark and
- * its own accent, which is precisely why it read as pasted in from somewhere else.
- */
 private val CARD_SHAPE = RoundedCornerShape(24.dp)
 private val ROW_SHAPE = RoundedCornerShape(18.dp)
+private const val TWO_COLUMN_MIN_DP = 760
+private const val COPIED_FEEDBACK_MS = 1400L
+private const val SHARE_PREFIX = "Join my SimpMusic Jam with code "
 
-/**
- * Below this the screen is one column. Two columns need room for two REAL columns — splitting a
- * 700dp window just makes two cramped ones.
- */
-private const val TWO_COLUMN_MIN_DP = 900
-
-/** How long the copy button shows a tick before going back to the copy glyph. */
-private const val COPIED_FEEDBACK_MS = 1800L
-private const val ROOM_CODE_LENGTH = ListenTogetherViewModel.ROOM_CODE_LENGTH
-
-/** Avatar tints derived from the theme, so they move with it instead of fighting it. */
 @Composable
 private fun tintFor(id: String): Color {
     val palette =
         listOf(
             MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.tertiary,
             MaterialTheme.colorScheme.secondary,
+            MaterialTheme.colorScheme.tertiary,
             MaterialTheme.colorScheme.primaryContainer,
             MaterialTheme.colorScheme.tertiaryContainer,
         )
@@ -176,6 +205,7 @@ private fun tintFor(id: String): Color {
 
 private fun initialOf(name: String): String = name.trim().firstOrNull()?.uppercase() ?: "?"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListenTogetherScreen(
     navController: NavController,
@@ -183,23 +213,59 @@ fun ListenTogetherScreen(
     viewModel: ListenTogetherViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
     val displayName by viewModel.displayName.collectAsStateWithLifecycle()
+    val accountThumbUrl by viewModel.accountThumbUrl.collectAsStateWithLifecycle()
     val codeInput by viewModel.roomCodeInput.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val recommendedSongs by viewModel.recommendedSongs.collectAsStateWithLifecycle()
+    val isLoadingRecommendations by viewModel.isLoadingRecommendations.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+
     val clipboard = LocalClipboardManager.current
     var managing by remember { mutableStateOf<RoomMember?>(null) }
+    var showAllMembersDialog by remember { mutableStateOf(false) }
+    var showAddSongSheet by remember { mutableStateOf(false) }
+    var showChatSheet by remember { mutableStateOf(false) }
+    var lastSeenMessageCount by rememberSaveable { mutableIntStateOf(0) }
 
-    // The back button refracts whatever the page has drawn, so the CONTENT is the backdrop source
-    // and the button is its SIBLING — the same arrangement Album/Playlist/Analytics use. Nesting the
-    // button inside the source is the render-feedback loop that kills the RuntimeShader.
+    LaunchedEffect(showChatSheet, state.chatMessages.size) {
+        if (showChatSheet) {
+            lastSeenMessageCount = state.chatMessages.size
+        }
+    }
+
+    val hasUnreadMessages = !showChatSheet && state.chatMessages.size > lastSeenMessageCount
+
+    val screenScope = rememberCoroutineScope()
+    var toastNotification by remember { mutableStateOf<String?>(null) }
+    var toastIsError by remember { mutableStateOf(false) }
+
+    val showToast: (String, Boolean) -> Unit = { msg, isErr ->
+        toastIsError = isErr
+        toastNotification = msg
+        screenScope.launch {
+            delay(2800)
+            if (toastNotification == msg) {
+                toastNotification = null
+            }
+        }
+    }
+
+    LaunchedEffect(state.error) {
+        state.error?.let { err ->
+            if (err.isNotBlank()) {
+                showToast(err, true)
+                viewModel.clearError()
+            }
+        }
+    }
+
     val backdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
-        // Measured from BoxWithConstraints, not the window: this is the space left after the
-        // navigation rail. Two columns only once there is room for two REAL columns — a 560dp
-        // ribbon centred in a 2000dp window is what made this read as a form rather than a page.
         val wide = maxWidth >= TWO_COLUMN_MIN_DP.dp
 
         val copyCode: () -> Unit = { state.roomCode?.let { clipboard.setText(AnnotatedString(it)) } }
@@ -209,12 +275,6 @@ fun ListenTogetherScreen(
         }
         val openSettings: () -> Unit = { navController.navigate(ListenTogetherSettingsDestination) }
 
-        // Home's ambient top glow, tinted from the THEME rather than artwork — this page has none.
-        // Same recipe as HomeScreen's first item: an angled two-stop gradient with a scrim easing
-        // its tail into the background so there is no seam. Static, since the theme colour does not
-        // move. Drawn first, so both layout branches scroll over it; deliberately NOT inside the
-        // glass backdrop source — the back button is a sibling of that source and nesting order is
-        // what keeps the RuntimeShader from feeding back into itself.
         val bg = MaterialTheme.colorScheme.background
         val glow =
             if (bg.luminance() > 0.5f) {
@@ -222,12 +282,8 @@ fun ListenTogetherScreen(
             } else {
                 MaterialTheme.colorScheme.primary.rgbFactor(0.3f)
             }
-        // The backdrop SOURCE is this ground box — page colour plus the glow — not the content
-        // columns: glass shows whatever its source recorded, and with the source on the (mostly
-        // transparent) content the back button rendered as a solid black coin over a tinted page.
-        // Same arrangement as AlbumScreen's landscape header: a matchParentSize sibling that takes
-        // part in no measurement, with the button kept OUTSIDE it — nesting the button inside the
-        // source is the render-feedback loop that kills the RuntimeShader.
+
+        // Ambient background glow
         Box(Modifier.matchParentSize().layerBackdrop(backdrop)) {
             Box(Modifier.matchParentSize().background(bg))
             Box(
@@ -246,68 +302,228 @@ fun ListenTogetherScreen(
             }
         }
 
-        if (wide) {
-            Row(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                // The identity side scrolls separately and normally does not move at all: the room
-                // code is what people read aloud, so it stays on screen while the list scrolls.
-                Column(
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .windowInsetsPadding(WindowInsets.statusBars),
+        ) {
+            // Sleek Top Nav Bar (Back, Jam Header, Chat button with Instagram dot, Settings)
+            JamTopBar(
+                inRoom = state.inRoom,
+                hasUnreadMessages = hasUnreadMessages,
+                backdrop = backdrop,
+                onBack = { navController.navigateUp() },
+                onChatClick = {
+                    lastSeenMessageCount = state.chatMessages.size
+                    showChatSheet = true
+                },
+                onSettingsClick = openSettings,
+            )
+
+            if (wide) {
+                Row(
                     modifier =
                         Modifier
-                            .weight(0.42f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(start = 24.dp, end = 28.dp, top = 14.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp),
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
-                    // Reserves the strip the floating back button is drawn over — it is a sibling of
-                    // this column and takes part in no measurement, so nothing else pushes down for it.
-                    Spacer(Modifier.height(BACK_BUTTON_STRIP))
-                    TitleBlock(inRoom = state.inRoom)
-                    ConnectionLine(state.connection, serverUrl, viewModel::connect, viewModel::disconnect)
-                    AnimatedVisibility(visible = state.inRoom) {
-                        RoomCodePoster(state, copyCode, shareCode)
+                    Column(
+                        modifier =
+                            Modifier
+                                .weight(0.42f)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        TitleBlock(inRoom = state.inRoom)
+                        AnimatedVisibility(visible = state.inRoom) {
+                            RoomCodePoster(
+                                state = state,
+                                selfAvatar = accountThumbUrl,
+                                onCopyCode = copyCode,
+                                onShareCode = shareCode,
+                                onLeaveJam = viewModel::leaveRoom,
+                                onManageMember = { managing = it },
+                                onOpenAllMembers = { showAllMembersDialog = true },
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier =
+                            Modifier
+                                .weight(0.58f)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                                .padding(bottom = 80.dp)
+                                .animateContentSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        WorkArea(
+                            state = state,
+                            displayName = displayName,
+                            accountThumbUrl = accountThumbUrl,
+                            codeInput = codeInput,
+                            viewModel = viewModel,
+                            onManage = { managing = it },
+                            onOpenAddSongs = { showAddSongSheet = true },
+                            onShowToast = showToast,
+                        )
                     }
                 }
-
+            } else {
                 Column(
                     modifier =
                         Modifier
-                            .weight(0.58f)
-                            .fillMaxHeight()
+                            .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(start = 4.dp, end = 40.dp, top = 30.dp)
+                            .padding(horizontal = 20.dp, vertical = 4.dp)
                             .animateContentSize(),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    WorkArea(state, displayName, codeInput, viewModel, { managing = it }, openSettings)
+                    TitleBlock(inRoom = state.inRoom)
+                    AnimatedVisibility(visible = state.inRoom) {
+                        RoomCodePoster(
+                            state = state,
+                            selfAvatar = accountThumbUrl,
+                            onCopyCode = copyCode,
+                            onShareCode = shareCode,
+                            onLeaveJam = viewModel::leaveRoom,
+                            onManageMember = { managing = it },
+                            onOpenAllMembers = { showAllMembersDialog = true },
+                        )
+                    }
+                    WorkArea(
+                        state = state,
+                        displayName = displayName,
+                        accountThumbUrl = accountThumbUrl,
+                        codeInput = codeInput,
+                        viewModel = viewModel,
+                        onManage = { managing = it },
+                        onOpenAddSongs = { showAddSongSheet = true },
+                        onShowToast = showToast,
+                    )
+                    Spacer(Modifier.height(32.dp))
                 }
-            }
-        } else {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(innerPadding)
-                        .padding(horizontal = 24.dp, vertical = 14.dp)
-                        .animateContentSize(),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                Spacer(Modifier.height(BACK_BUTTON_STRIP))
-                TitleBlock(inRoom = state.inRoom)
-                ConnectionLine(state.connection, serverUrl, viewModel::connect, viewModel::disconnect)
-                AnimatedVisibility(visible = state.inRoom) {
-                    RoomCodePoster(state, copyCode, shareCode)
-                }
-                WorkArea(state, displayName, codeInput, viewModel, { managing = it }, openSettings)
             }
         }
 
-        BackButton(backdrop) { navController.navigateUp() }
+        // Floating bottom toast notification (auto-dismiss after 2.8s)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = toastNotification != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it },
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = innerPadding.calculateBottomPadding() + 24.dp)
+                    .padding(horizontal = 24.dp)
+                    .zIndex(100f),
+        ) {
+            toastNotification?.let { msg ->
+                Box(
+                    modifier =
+                        Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .border(
+                                1.dp,
+                                if (toastIsError) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                CircleShape,
+                            ).shadow(8.dp, CircleShape)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (toastIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary),
+                        )
+                        Text(
+                            text = msg,
+                            style = typo().bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                        )
+                    }
+                }
+            }
+        }
     }
 
+    // Add Songs Sheet
+    if (showAddSongSheet) {
+        AddSongToJamSheet(
+            query = searchQuery,
+            isSearching = isSearching,
+            searchResults = searchResults,
+            recommendedSongs = recommendedSongs,
+            isLoadingRecommendations = isLoadingRecommendations,
+            canPlayDirect = state.isHost || state.permissions.allowPlayDirect,
+            onQueryChange = viewModel::onSearchQueryChange,
+            onLoadMoreRecommendations = viewModel::loadMoreRecommendations,
+            onQueueTrack = viewModel::addSongToJam,
+            onQueueSongResult = viewModel::addSongToJam,
+            onPlayTrack = { track ->
+                viewModel.playDirectInJam(track)
+                showAddSongSheet = false
+                viewModel.onSearchQueryChange("")
+            },
+            onPlaySongResult = { song ->
+                viewModel.playDirectInJam(song)
+                showAddSongSheet = false
+                viewModel.onSearchQueryChange("")
+            },
+            onDismiss = {
+                showAddSongSheet = false
+                viewModel.onSearchQueryChange("")
+            },
+        )
+    }
+
+    // In-Jam Messenger-Style Chat Sheet
+    if (showChatSheet) {
+        JamChatSheet(
+            state = state,
+            selfUserId = state.selfUserId,
+            selfUsername = displayName,
+            selfAvatar = accountThumbUrl,
+            onSendMessage = { text, replyToId, replyToText, replyToSenderName ->
+                viewModel.sendChatMessage(text, replyToId, replyToText, replyToSenderName)
+            },
+            onReact = { msgId, emoji ->
+                viewModel.reactToMessage(msgId, emoji)
+            },
+            onDismiss = { showChatSheet = false },
+        )
+    }
+
+    // All Members Dialog (when tapping "..." beside room code)
+    if (showAllMembersDialog) {
+        AllMembersDialog(
+            members = state.members,
+            selfId = state.selfUserId,
+            selfAvatar = accountThumbUrl,
+            canManage = state.isHost,
+            onManage = { member ->
+                showAllMembersDialog = false
+                managing = member
+            },
+            onDismiss = { showAllMembersDialog = false },
+        )
+    }
+
+    // Member Action Menu Dialog
     managing?.let { member ->
-        MemberActionDialog(
+        EnhancedMemberActionDialog(
             member = member,
             onTransferHost = {
                 viewModel.transferHost(member.userId)
@@ -326,31 +542,98 @@ fun ListenTogetherScreen(
     }
 }
 
-/**
- * Everything that changes as you use the screen: the form before a room, the people inside one.
- *
- * A `ColumnScope` extension so the two-column and one-column skeletons share it verbatim instead
- * of drifting apart — the bug where a fix lands on one layout only.
- */
+@Composable
+private fun JamTopBar(
+    inRoom: Boolean,
+    hasUnreadMessages: Boolean,
+    backdrop: PlatformBackdrop,
+    onBack: () -> Unit,
+    onChatClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        LiquidGlassIconButton(
+            backdrop = backdrop,
+            imageVector = SimpIcons.ArrowBackIosNew,
+            tint = MaterialTheme.colorScheme.onSurface,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.size(42.dp),
+            onClick = onBack,
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (inRoom) {
+                // In-Jam Chat Button with Instagram-Style Unread Small Red Dot
+                Box {
+                    LiquidGlassIconButton(
+                        backdrop = backdrop,
+                        imageVector = SimpIcons.Chat,
+                        tint = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.size(42.dp),
+                        onClick = onChatClick,
+                    )
+                    if (hasUnreadMessages) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = (-3).dp, y = 3.dp)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.error)
+                                    .border(1.5.dp, MaterialTheme.colorScheme.background, CircleShape),
+                        )
+                    }
+                }
+            }
+
+            LiquidGlassIconButton(
+                backdrop = backdrop,
+                imageVector = SimpIcons.Settings,
+                tint = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.size(42.dp),
+                onClick = onSettingsClick,
+            )
+        }
+    }
+}
+
 @Composable
 private fun ColumnScope.WorkArea(
     state: ListenTogetherRoom,
     displayName: String,
+    accountThumbUrl: String?,
     codeInput: String,
     viewModel: ListenTogetherViewModel,
     onManage: (RoomMember) -> Unit,
-    onSettings: () -> Unit,
+    onOpenAddSongs: () -> Unit,
+    onShowToast: (String, Boolean) -> Unit,
 ) {
-    // Held so the card keeps its text while it animates out — `state.error` is already null by then
-    // and the card would collapse through a frame of empty space.
-    var lastError by remember { mutableStateOf("") }
-    LaunchedEffect(state.error) { state.error?.let { lastError = it } }
-    AnimatedVisibility(visible = state.error != null) {
-        ErrorCard(message = lastError, onDismiss = viewModel::clearError)
-    }
-
     when {
         state.inRoom -> {
+            // 1. Now Playing in Jam (Mini player with duration line, previous, play/pause, next)
+            JamNowPlayingCard(
+                track = state.currentTrack,
+                isPlaying = state.isPlaying,
+                positionMs = state.position,
+                canControlPlayback = state.isHost || state.permissions.allowPlayPause,
+                onPrevious = viewModel::skipPrevious,
+                onTogglePlayPause = viewModel::togglePlayPause,
+                onNext = viewModel::skipNext,
+            )
+
             AnimatedVisibility(visible = state.waitingFor.isNotEmpty()) {
                 BufferBanner(state.waitingForNames)
             }
@@ -364,601 +647,1162 @@ private fun ColumnScope.WorkArea(
                     Suggestions(state.suggestions, viewModel::approveSuggestion, viewModel::rejectSuggestion)
                 }
             }
-            Members(
-                members = state.members,
-                selfId = state.selfUserId,
-                canManage = state.isHost,
-                onManage = onManage,
+
+            // 2. Jam Queue Section (with swipe to re-queue / remove)
+            JamQueueSection(
+                queue = state.queue,
+                canQueue = state.isHost || state.permissions.allowQueue,
+                canReorder = state.isHost || state.permissions.allowReorder,
+                onAddClick = onOpenAddSongs,
+                onReorder = { from, to -> viewModel.reorderJamQueue(from, to) },
+                onRequeue = { track ->
+                    viewModel.addSongToJam(track)
+                    onShowToast("Re-queued \"${track.title}\" to Jam", false)
+                },
+                onRemove = { idx, track ->
+                    viewModel.removeSongFromJam(idx)
+                    onShowToast("Removed \"${track.title}\" from queue", false)
+                },
             )
-            FooterActions(onLeave = viewModel::leaveRoom, onSettings = onSettings)
         }
 
         state.pendingJoinCode != null -> {
             WaitingForApproval(state.pendingJoinCode.orEmpty(), viewModel::cancelJoin)
-            FooterActions(onLeave = null, onSettings = onSettings)
         }
 
         else -> {
-            NameField(displayName, viewModel::onDisplayNameChange)
-
-            PrimaryButton(
-                text = stringResource(Res.string.lt_create_room),
-                enabled = displayName.isNotBlank() && state.isConnected,
-                onClick = viewModel::createRoom,
-            )
-
-            DividerLabel(stringResource(Res.string.lt_or_join_with_code))
-
-            CodeInput(codeInput, viewModel::onRoomCodeChange)
-
-            SecondaryButton(
-                text = stringResource(Res.string.lt_join_room),
-                enabled = displayName.isNotBlank() && codeInput.length == ROOM_CODE_LENGTH && state.isConnected,
-                onClick = viewModel::joinRoom,
-            )
-
-            Text(
-                text = stringResource(Res.string.lt_background_warning),
-                style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
-
-            FooterActions(onLeave = null, onSettings = onSettings)
-        }
-    }
-
-    CreditFooter()
-    EndOfPage(withoutCredit = true)
-}
-
-/**
- * Where the protocol came from.
- *
- * Left-aligned with everything else: EndOfPage centres its own credit, which reads as misaligned
- * the moment the page stops being a single centred column.
- */
-@Composable
-private fun CreditFooter() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            text = stringResource(Res.string.lt_credit_protocol),
-            style = typo().bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(Res.string.lt_credit_compatible),
-            style = typo().bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/** Prefix for the share button; the code alone means nothing to the recipient. */
-private const val SHARE_PREFIX = "Join my SimpMusic room with code "
-
-// ───────────────────────────────── structure ─────────────────────────────────
-
-/** Status-bar inset + the 8.dp above the button + its own 48.dp. */
-private val BACK_BUTTON_STRIP = 56.dp
-
-@Composable
-private fun BoxScope.BackButton(
-    backdrop: PlatformBackdrop,
-    onBack: () -> Unit,
-) {
-    // Glass, like every other back button in the app. It only works as an OVERLAY: in the scrolling
-    // column it used to sit in, what is behind it is the flat page background, and glass with
-    // nothing to refract renders as a grey coin. Floating it over the content gives it the page to
-    // refract — and keeps it reachable once the page has scrolled, which the in-flow one did not.
-    LiquidGlassIconButton(
-        backdrop = backdrop,
-        imageVector = SimpIcons.ArrowBackIosNew,
-        // NOT the default Color.White: every other caller sits on a ForceDark screen, but this page
-        // follows the theme — at light theme a white glyph sits on light glass (or on the light
-        // fallback pill) and disappears. onSurface flips with the scheme.
-        tint = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(24.dp),
-        modifier =
-            Modifier
-                .align(Alignment.TopStart)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = 12.dp, top = 8.dp)
-                .size(48.dp),
-        onClick = onBack,
-    )
-}
-
-/**
- * The page title, left-aligned and large enough to be the biggest thing on screen after the room
- * code. It was a centred `titleMedium` in a top bar over a decorative circle icon — which is the
- * layout every generated screen has, and it left nothing on the page holding rank.
- */
-@Composable
-private fun TitleBlock(inRoom: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = stringResource(Res.string.listen_together),
-            style = typo().titleLarge.copy(fontSize = 32.sp, lineHeight = 36.sp),
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        if (!inRoom) {
-            Text(
-                text = stringResource(Res.string.lt_tagline),
-                style = typo().bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * Connection state as one line of text, not a bordered card with a filled pill in it.
- *
- * It is ambient information — you glance at it and move on — so giving it the same card treatment
- * as the room itself was what made every block on this screen look equally important.
- */
-@Composable
-private fun ConnectionLine(
-    connection: RoomConnection,
-    serverUrl: String,
-    onConnect: () -> Unit,
-    onDisconnect: () -> Unit,
-) {
-    val connected = connection is RoomConnection.Connected
-    val accent =
-        when (connection) {
-            is RoomConnection.Connected -> MaterialTheme.colorScheme.primary
-            is RoomConnection.Connecting -> MaterialTheme.colorScheme.tertiary
-            is RoomConnection.Failed -> MaterialTheme.colorScheme.error
-            RoomConnection.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
-    val label =
-        when (connection) {
-            is RoomConnection.Connected -> stringResource(Res.string.lt_connected)
-            is RoomConnection.Connecting -> stringResource(Res.string.lt_connecting)
-            is RoomConnection.Failed -> connection.reason
-            RoomConnection.Disconnected -> stringResource(Res.string.lt_not_connected)
-        }
-
-    // Connecting is the one state the user is waiting on, and a static dot is indistinguishable
-    // from a stuck one.
-    val pulse = rememberInfiniteTransition(label = "ltConnecting")
-    val dotAlpha by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
-        label = "ltConnectingAlpha",
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(
-                    if (connection is RoomConnection.Connecting) accent.copy(alpha = dotAlpha) else accent,
-                ),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(label, style = typo().bodyMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val serverSubtitle =
-                if (serverUrl.isNotBlank()) {
-                    serverUrl.removePrefix("wss://").removePrefix("ws://").removeSuffix("/ws")
-                } else {
-                    "${stringResource(Res.string.lt_default_server_name)} · ${stringResource(Res.string.lt_default_server_location)}"
-                }
-            Text(
-                serverSubtitle,
-                style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text(
-            text =
-                if (connected) {
-                    stringResource(Res.string.lt_disconnect)
-                } else {
-                    stringResource(Res.string.lt_connect)
-                },
-            style = typo().labelMedium,
-            color = if (connected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-            modifier =
-                Modifier
-                    .clip(CircleShape)
-                    .clickable { if (connected) onDisconnect() else onConnect() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-        )
-    }
-}
-
-/**
- * The room code, as a poster.
- *
- * This is the one thing on the screen a person reads out loud to someone sitting next to them, so
- * it is the one thing allowed to be outsized — and it sits directly on the background rather than
- * inside a card, because a card would rank it level with the Settings row.
- */
-@Composable
-private fun RoomCodePoster(
-    state: ListenTogetherRoom,
-    onCopyCode: () -> Unit,
-    onShareCode: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text =
-                if (state.isHost) {
-                    stringResource(Res.string.lt_room_code)
-                } else {
-                    stringResource(Res.string.lt_in_room)
-                },
-            style = typo().labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text =
-                state.roomCode
-                    ?.chunked(4)
-                    ?.joinToString(" ")
-                    .orEmpty(),
-            // The app's scale stops at 25sp because nothing else has to carry across a room. Sized
-            // so eight monospace characters still fit a 390dp phone once padding is taken out.
-            style =
-                typo().titleLarge.copy(
-                    fontSize = 40.sp,
-                    lineHeight = 46.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                ),
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
-            Text(
-                text =
-                    if (state.isHost) {
-                        "You are the host · ${state.members.size} listening"
-                    } else {
-                        "${state.members.firstOrNull { it.isHost }?.username.orEmpty()} is controlling playback"
-                    },
-                style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (state.isHost) {
-            var copied by remember { mutableStateOf(false) }
-            LaunchedEffect(copied) {
-                if (copied) {
-                    delay(COPIED_FEEDBACK_MS)
-                    copied = false
-                }
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 2.dp),
-            ) {
-                // A silent clipboard write is indistinguishable from a dead button, and this one
-                // is the whole point of the screen — the tick is the only proof it did anything.
-                Crossfade(targetState = copied, label = "ltCopied") { done ->
-                    GlyphButton(if (done) SimpIcons.Check else SimpIcons.ContentCopy) {
-                        onCopyCode()
-                        copied = true
+            JamCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Avatar(
+                        name = initialOf(displayName.ifBlank { "You" }),
+                        background = tintFor("self"),
+                        size = 48.dp,
+                        imageUrl = accountThumbUrl,
+                    )
+                    Column(Modifier.weight(1f)) {
+                        NameField(displayName, viewModel::onDisplayNameChange)
                     }
                 }
-                GlyphButton(SimpIcons.Share, onShareCode)
             }
-        }
-    }
-}
 
-/**
- * The buffer barrier, said out loud.
- *
- * Playback genuinely stops until the slowest device is ready; naming who is being waited for is
- * what stops the silence reading as the app having hung.
- */
-@Composable
-private fun BufferBanner(names: List<String>) {
-    Surface(tint = MaterialTheme.colorScheme.tertiary) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(
-                text = if (names.isEmpty()) "Waiting for everyone" else "Waiting for ${names.joinToString(", ")}",
-                style = typo().bodyMedium,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-            Text(
-                "Playback resumes when everyone is ready",
-                style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
+            JamCard {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    PrimaryButton(
+                        text = stringResource(Res.string.lt_create_room),
+                        enabled = displayName.isNotBlank(),
+                        onClick = viewModel::createRoom,
+                    )
+                    DividerLabel(stringResource(Res.string.lt_or_join_with_code))
+                    CodeInput(codeInput, viewModel::onRoomCodeChange)
+                    SecondaryButton(
+                        text = stringResource(Res.string.lt_join_room),
+                        enabled = displayName.isNotBlank() && codeInput.length == ListenTogetherViewModel.ROOM_CODE_MIN_LENGTH,
+                        onClick = viewModel::joinRoom,
+                    )
+                }
+            }
 
-@Composable
-private fun WaitingForApproval(
-    code: String,
-    onCancel: () -> Unit,
-) {
-    Surface(tint = MaterialTheme.colorScheme.tertiary) {
-        Column(
-            Modifier.fillMaxWidth().padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                stringResource(Res.string.lt_waiting_approval),
-                style = typo().titleSmall,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-            Text(
-                code.chunked(4).joinToString("  "),
-                style = typo().titleMedium.copy(fontFamily = FontFamily.Monospace, letterSpacing = 3.sp),
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                stringResource(Res.string.lt_waiting_approval_desc),
-                style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(4.dp))
-            Chip(stringResource(Res.string.lt_cancel_join), onClick = onCancel)
-        }
-    }
-}
-
-@Composable
-private fun ErrorCard(
-    message: String,
-    onDismiss: () -> Unit,
-) {
-    Surface(tint = MaterialTheme.colorScheme.error) {
-        Row(
-            Modifier.fillMaxWidth().clickable { onDismiss() }.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(message, style = typo().bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-            Icon(SimpIcons.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
-@Composable
-private fun JoinRequests(
-    requests: List<RoomJoinRequest>,
-    onApprove: (String) -> Unit,
-    onReject: (String) -> Unit,
-) {
-    SectionHeader(stringResource(Res.string.lt_join_requests), requests.size)
-    requests.forEach { request ->
-        Surface {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Avatar(initialOf(request.username), tintFor(request.userId), 40.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(request.username, style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground, maxLines = 1)
+            JamCard(tint = MaterialTheme.colorScheme.primary) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        stringResource(Res.string.lt_just_asked),
+                        "Jam in SimpMusic",
+                        style = typo().titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        stringResource(Res.string.lt_background_warning),
                         style = typo().bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                ActionGlyph(SimpIcons.Check, MaterialTheme.colorScheme.primary) { onApprove(request.userId) }
-                ActionGlyph(SimpIcons.Close, MaterialTheme.colorScheme.error) { onReject(request.userId) }
             }
         }
     }
 }
 
 @Composable
-private fun Suggestions(
-    suggestions: List<RoomSuggestion>,
-    onApprove: (String) -> Unit,
-    onReject: (String) -> Unit,
+private fun JamNowPlayingCard(
+    track: RoomTrack?,
+    isPlaying: Boolean,
+    positionMs: Long,
+    canControlPlayback: Boolean,
+    onPrevious: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onNext: () -> Unit,
 ) {
-    SectionHeader(stringResource(Res.string.lt_suggestions), suggestions.size)
-    suggestions.forEach { suggestion ->
-        Surface {
+    JamCard(tint = MaterialTheme.colorScheme.primary) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                Modifier.fillMaxWidth().padding(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Album Art
                 Box(
-                    Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)),
-                )
+                    modifier =
+                        Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    if (track?.thumbnail.isNullOrBlank()) {
+                        Icon(
+                            SimpIcons.QueueMusic,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp).align(Alignment.Center),
+                        )
+                    } else {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(track?.thumbnail)
+                                    .crossfade(true)
+                                    .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+
+                // Track Info
                 Column(Modifier.weight(1f)) {
                     Text(
-                        suggestion.track.title,
-                        style = typo().bodyMedium,
+                        text = track?.title ?: "No track currently playing",
+                        style = typo().titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${suggestion.fromUsername} suggested",
+                        text = track?.artist?.ifBlank { "Jam session is active" } ?: "Add songs to start listening",
                         style = typo().bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                ActionGlyph(SimpIcons.Check, MaterialTheme.colorScheme.primary) { onApprove(suggestion.suggestionId) }
-                ActionGlyph(SimpIcons.Close, MaterialTheme.colorScheme.error) { onReject(suggestion.suggestionId) }
+
+                // Controls: Previous, Play/Pause, Next
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    IconButton(
+                        onClick = onPrevious,
+                        enabled = canControlPlayback && track != null,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            imageVector = SimpIcons.SkipPrevious,
+                            contentDescription = "Previous Track",
+                            tint = if (canControlPlayback && track != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onTogglePlayPause,
+                        enabled = canControlPlayback && track != null,
+                        modifier =
+                            Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (canControlPlayback && track != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+                                ),
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = if (canControlPlayback && track != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onNext,
+                        enabled = canControlPlayback && track != null,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            imageVector = SimpIcons.SkipNext,
+                            contentDescription = "Next Track",
+                            tint = if (canControlPlayback && track != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+@Composable
+private fun JamQueueSection(
+    queue: List<RoomTrack>,
+    canQueue: Boolean,
+    canReorder: Boolean,
+    onAddClick: () -> Unit,
+    onReorder: (Int, Int) -> Unit,
+    onRequeue: (RoomTrack) -> Unit,
+    onRemove: (Int, RoomTrack) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        SectionHeader("Jam Queue", queue.size)
+        if (canQueue) {
+            FilledTonalButton(
+                onClick = onAddClick,
+                shape = CircleShape,
+                colors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            ) {
+                Icon(SimpIcons.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Add songs", style = typo().labelMedium.copy(fontWeight = FontWeight.SemiBold))
+            }
+        }
+    }
+
+    if (queue.isEmpty()) {
+        JamCard {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(
+                        SimpIcons.QueueMusic,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Text(
+                        "Queue is empty",
+                        style = typo().bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        if (canQueue) "Anyone in the Jam can queue up songs!" else "Only the host can add songs to the queue",
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+            }
+        }
+    } else {
+        val lazyListState = rememberLazyListState()
+        val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+            onReorder(from.index, to.index)
+        }
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            itemsIndexed(queue, key = { index, track -> track.id + "_$index" }) { index, track ->
+                ReorderableItem(reorderableState, key = track.id + "_$index") { isDragging ->
+                    SwipeableQueueCard(
+                        track = track,
+                        index = index,
+                        canReorder = canReorder,
+                        dragModifier = Modifier.draggableHandle(),
+                        onRemove = { onRemove(index, track) },
+                        onRequeue = { onRequeue(track) },
+                        onMoveUp = { onReorder(index, index - 1) },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Members(
-    members: List<RoomMember>,
-    selfId: String,
-    canManage: Boolean,
-    onManage: (RoomMember) -> Unit,
+private fun SwipeableQueueCard(
+    track: RoomTrack,
+    index: Int,
+    canReorder: Boolean,
+    dragModifier: Modifier = Modifier,
+    onRemove: () -> Unit,
+    onRequeue: () -> Unit,
+    onMoveUp: () -> Unit,
 ) {
-    SectionHeader(stringResource(Res.string.lt_in_room), members.size)
-    // A plain divided list, not one card per person: a room of five people was five identical
-    // rounded rectangles, which reads as five unrelated objects rather than one list.
-    Column(Modifier.fillMaxWidth()) {
-        members.forEachIndexed { index, member ->
-            if (index > 0) {
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val swipeThreshold = 180f
+    val maxDrag = 280f
+
+    val isDraggingRight = offsetX.value > 0f
+    val isDraggingLeft = offsetX.value < 0f
+    val progressRight = (offsetX.value / swipeThreshold).coerceIn(0f, 1f)
+    val progressLeft = (-offsetX.value / swipeThreshold).coerceIn(0f, 1f)
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(CARD_SHAPE),
+    ) {
+        // Background reveal
+        when {
+            isDraggingRight -> {
+                // Primary background on left for Re-Queue
                 Box(
-                    Modifier
-                        .padding(start = 52.dp)
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)),
-                )
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = progressRight * 0.95f))
+                            .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.scale(0.7f + progressRight * 0.3f),
+                    ) {
+                        Box(
+                            modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onPrimary),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(SimpIcons.QueueMusic, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        }
+                        Text(
+                            if (offsetX.value >= swipeThreshold) "Release to Re-queue" else "Re-queue",
+                            style = typo().labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
             }
-            val manageable = canManage && member.userId != selfId
+            isDraggingLeft -> {
+                // Red background on right for Remove from Queue
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .background(Color(0xFFE53935).copy(alpha = progressLeft * 0.95f))
+                            .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.scale(0.7f + progressLeft * 0.3f),
+                    ) {
+                        Text(
+                            if (-offsetX.value >= swipeThreshold) "Release to Remove" else "Remove",
+                            style = typo().labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                        )
+                        Box(
+                            modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(SimpIcons.Delete, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Foreground card
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    .clip(CARD_SHAPE)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f), CARD_SHAPE)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (offsetX.value >= swipeThreshold) {
+                                    onRequeue()
+                                } else if (offsetX.value <= -swipeThreshold) {
+                                    onRemove()
+                                }
+                                scope.launch {
+                                    offsetX.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec =
+                                            spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessMedium,
+                                            ),
+                                    )
+                                }
+                            },
+                            onDragCancel = {
+                                scope.launch { offsetX.animateTo(0f, spring()) }
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                scope.launch {
+                                    val next = (offsetX.value + dragAmount).coerceIn(-maxDrag, maxDrag)
+                                    offsetX.snapTo(next)
+                                }
+                            },
+                        )
+                    },
+        ) {
             Row(
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(8.dp))) {
+                    if (track.thumbnail.isNotBlank()) {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(track.thumbnail)
+                                    .crossfade(true)
+                                    .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Icon(
+                            SimpIcons.QueueMusic,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp).align(Alignment.Center),
+                        )
+                    }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = track.title,
+                        style = typo().bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = track.artist.ifBlank { "Unknown Artist" },
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (canReorder) {
+                    Icon(
+                        SimpIcons.DragHandle,
+                        contentDescription = "Reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp).then(dragModifier),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddSongToJamSheet(
+    query: String,
+    isSearching: Boolean,
+    searchResults: List<SongsResult>,
+    recommendedSongs: List<RoomTrack>,
+    isLoadingRecommendations: Boolean,
+    canPlayDirect: Boolean,
+    onQueryChange: (String) -> Unit,
+    onLoadMoreRecommendations: () -> Unit,
+    onQueueTrack: (RoomTrack) -> Unit,
+    onQueueSongResult: (SongsResult) -> Unit,
+    onPlayTrack: (RoomTrack) -> Unit,
+    onPlaySongResult: (SongsResult) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var queuedNotification by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun triggerQueueToast(trackTitle: String) {
+        queuedNotification = "Added \"$trackTitle\" to Jam queue"
+        scope.launch {
+            delay(2200)
+            if (queuedNotification?.contains(trackTitle) == true) {
+                queuedNotification = null
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.88f),
+        ) {
+            Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .then(if (manageable) Modifier.clickable { onManage(member) } else Modifier)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Avatar(initialOf(member.username), tintFor(member.userId), 40.dp)
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
                         Text(
-                            member.username,
-                            style = typo().bodyMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            "Add Songs to Jam",
+                            style = typo().titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
-                        if (member.isHost) {
-                            Box(
-                                Modifier
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                            ) {
+                        Text(
+                            if (canPlayDirect) "Tap to play now • Swipe right to queue" else "Tap or swipe right to queue",
+                            style = typo().bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(SimpIcons.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                // Search Bar
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(
+                        SimpIcons.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = typo().bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.weight(1f),
+                        decorationBox = { inner ->
+                            if (query.isEmpty()) {
                                 Text(
-                                    stringResource(Res.string.lt_host_badge),
-                                    style = typo().labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    "Search YouTube Music tracks…",
+                                    style = typo().bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            }
+                            inner()
+                        },
+                    )
+                    if (query.isNotEmpty()) {
+                        Icon(
+                            SimpIcons.Close,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp).clickable { onQueryChange("") },
+                        )
+                    }
+                }
+
+                // Content Area
+                if (isSearching) {
+                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(36.dp), color = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (query.isNotBlank()) {
+                    // Search results
+                    if (searchResults.isEmpty()) {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text("No songs found", style = typo().bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(searchResults, key = { it.videoId }) { song ->
+                                SongFullWidthItems(
+                                    track = song.toTrack(),
+                                    isPlaying = false,
+                                    modifier = Modifier,
+                                    onAddToQueue = { _ ->
+                                        onQueueSongResult(song)
+                                        triggerQueueToast(song.title.orEmpty())
+                                    },
+                                    onClickListener = { _ ->
+                                        if (canPlayDirect) {
+                                            onPlaySongResult(song)
+                                        } else {
+                                            onQueueSongResult(song)
+                                            triggerQueueToast(song.title.orEmpty())
+                                        }
+                                    },
                                 )
                             }
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(
-                            Modifier.size(6.dp).clip(CircleShape).background(
-                                when {
-                                    member.isBuffering -> MaterialTheme.colorScheme.tertiary
-                                    member.isConnected -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            ),
+                } else {
+                    // Recommendations List with Endless Scroll
+                    if (recommendedSongs.isEmpty() && isLoadingRecommendations) {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(36.dp), color = MaterialTheme.colorScheme.primary)
+                        }
+                    } else if (recommendedSongs.isEmpty()) {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text("No recommendations found", style = typo().bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            Text(
+                                "Recommended for you",
+                                style = typo().titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                itemsIndexed(recommendedSongs, key = { index, track -> "${track.id}_$index" }) { index, track ->
+                                    if (index >= recommendedSongs.size - 4) {
+                                        LaunchedEffect(Unit) {
+                                            onLoadMoreRecommendations()
+                                        }
+                                    }
+                                    SongFullWidthItems(
+                                        track = track,
+                                        isPlaying = false,
+                                        modifier = Modifier,
+                                        onAddToQueue = { _ ->
+                                            onQueueTrack(track)
+                                            triggerQueueToast(track.title)
+                                        },
+                                        onClickListener = { _ ->
+                                            if (canPlayDirect) {
+                                                onPlayTrack(track)
+                                            } else {
+                                                onQueueTrack(track)
+                                                triggerQueueToast(track.title)
+                                            }
+                                        },
+                                    )
+                                }
+
+                                if (isLoadingRecommendations) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom toast notification when a song is queued
+            androidx.compose.animation.AnimatedVisibility(
+                visible = queuedNotification != null,
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 20.dp)
+                        .padding(horizontal = 24.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.inverseSurface)
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = SimpIcons.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
                         )
                         Text(
-                            text =
-                                when {
-                                    member.userId == selfId -> stringResource(Res.string.lt_you)
-                                    member.isBuffering -> "loading…"
-                                    member.isConnected -> "in sync"
-                                    else -> "disconnected"
-                                },
+                            text = queuedNotification ?: "",
+                            style = typo().bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+// ─────────────────────── In-Jam Messenger-Style Chat ───────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun JamChatSheet(
+    state: ListenTogetherRoom,
+    selfUserId: String,
+    selfUsername: String,
+    selfAvatar: String?,
+    onSendMessage: (text: String, replyToId: String?, replyToText: String?, replyToSenderName: String?) -> Unit,
+    onReact: (messageId: String, emoji: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var messageText by remember { mutableStateOf("") }
+    var replyTarget by remember { mutableStateOf<JamChatMessage?>(null) }
+    var reactingMessageId by remember { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to bottom when new messages arrive
+    LaunchedEffect(state.chatMessages.size) {
+        if (state.chatMessages.isNotEmpty()) {
+            listState.animateScrollToItem(state.chatMessages.size - 1)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.85f)
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+        ) {
+            // Chat Header with members avatars
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "Jam Chat",
+                        style = typo().titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    // Mini avatar stack of participants
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy((-8).dp),
+                    ) {
+                        items(state.members) { m ->
+                            Avatar(
+                                name = initialOf(m.username),
+                                background = tintFor(m.userId),
+                                size = 26.dp,
+                                imageUrl = m.avatarUrl ?: if (m.userId == selfUserId) selfAvatar else null,
+                            )
+                        }
+                    }
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(SimpIcons.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // Message stream
+            if (state.chatMessages.isEmpty()) {
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("👋 Welcome to Jam Chat!", style = typo().titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            "Swipe right to reply • Long-press to react with emoji",
                             style = typo().bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                if (manageable) {
-                    Icon(
-                        SimpIcons.ArrowForwardIos,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
-                    )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    items(state.chatMessages, key = { it.id }) { message ->
+                        val isSelf = message.senderId == selfUserId
+                        val senderAvatarUrl =
+                            if (isSelf) {
+                                selfAvatar
+                            } else {
+                                state.members.firstOrNull { it.userId == message.senderId }?.avatarUrl ?: message.senderAvatar
+                            }
+
+                        ChatMessageBubble(
+                            message = message,
+                            isSelf = isSelf,
+                            senderAvatar = senderAvatarUrl,
+                            onReply = { replyTarget = message },
+                            onLongPress = { reactingMessageId = message.id },
+                            onReact = { emoji -> onReact(message.id, emoji) },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                }
+            }
+
+            // Emoji Reaction Bar (if active)
+            reactingMessageId?.let { targetId ->
+                EmojiReactionSelector(
+                    onSelect = { emoji ->
+                        onReact(targetId, emoji)
+                        reactingMessageId = null
+                    },
+                    onDismiss = { reactingMessageId = null },
+                )
+            }
+
+            // Reply Context Preview Bar
+            replyTarget?.let { reply ->
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Replying to ${reply.senderName}",
+                            style = typo().labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            reply.text,
+                            style = typo().bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconButton(onClick = { replyTarget = null }, modifier = Modifier.size(24.dp)) {
+                        Icon(SimpIcons.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+
+            // Message Composer
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .padding(start = 16.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BasicTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    singleLine = true,
+                    textStyle = typo().bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions =
+                        KeyboardActions(onSend = {
+                            if (messageText.isNotBlank()) {
+                                onSendMessage(
+                                    messageText,
+                                    replyTarget?.id,
+                                    replyTarget?.text,
+                                    replyTarget?.senderName,
+                                )
+                                messageText = ""
+                                replyTarget = null
+                            }
+                        }),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (messageText.isEmpty()) {
+                            Text("Send a message…", style = typo().bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        }
+                        inner()
+                    },
+                )
+                IconButton(
+                    onClick = {
+                        if (messageText.isNotBlank()) {
+                            onSendMessage(
+                                messageText,
+                                replyTarget?.id,
+                                replyTarget?.text,
+                                replyTarget?.senderName,
+                            )
+                            messageText = ""
+                            replyTarget = null
+                        }
+                    },
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                ) {
+                    Icon(SimpIcons.Send, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
                 }
             }
         }
     }
 }
 
-/**
- * Leaving and settings, as quiet text actions on one line.
- *
- * They were two full-width cards, which gave "Settings" the same visual weight as the room itself.
- */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FooterActions(
-    onLeave: (() -> Unit)?,
-    onSettings: () -> Unit,
+private fun ChatMessageBubble(
+    message: JamChatMessage,
+    isSelf: Boolean,
+    senderAvatar: String?,
+    onReply: () -> Unit,
+    onLongPress: () -> Unit,
+    onReact: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (offsetX.value > 60f) {
+                                onReply()
+                            }
+                            scope.launch { offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
+                        },
+                        onDragCancel = {
+                            scope.launch { offsetX.animateTo(0f, spring()) }
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            scope.launch {
+                                val next = (offsetX.value + dragAmount).coerceIn(0f, 100f)
+                                offsetX.snapTo(next)
+                            }
+                        },
+                    )
+                },
+        horizontalArrangement = if (isSelf) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom,
     ) {
-        if (onLeave != null) {
-            TextAction(
-                icon = SimpIcons.Logout,
-                text = stringResource(Res.string.lt_leave_room),
-                color = MaterialTheme.colorScheme.error,
-                onClick = onLeave,
+        if (!isSelf) {
+            // Google Profile Photo on each message like Facebook Messenger
+            Avatar(
+                name = initialOf(message.senderName),
+                background = tintFor(message.senderId),
+                size = 32.dp,
+                imageUrl = senderAvatar,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+
+        Column(
+            horizontalAlignment = if (isSelf) Alignment.End else Alignment.Start,
+            modifier = Modifier.widthIn(max = 280.dp),
+        ) {
+            if (!isSelf) {
+                // Name above message
+                Text(
+                    text = message.senderName,
+                    style = typo().labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = tintFor(message.senderId),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 3.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            // Message Bubble
+            Box(
+                modifier =
+                    Modifier
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = if (isSelf) 18.dp else 4.dp,
+                                topEnd = if (isSelf) 4.dp else 18.dp,
+                                bottomStart = 18.dp,
+                                bottomEnd = 18.dp,
+                            ),
+                        ).combinedClickable(
+                            onClick = onReply,
+                            onLongClick = onLongPress,
+                        ).background(
+                            if (isSelf) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                        ).padding(horizontal = 14.dp, vertical = 9.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Quoted reply snippet
+                    if (!message.replyToText.isNullOrBlank()) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isSelf) Color.Black.copy(alpha = 0.2f) else MaterialTheme.colorScheme.background.copy(alpha = 0.35f),
+                                    ).padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Column {
+                                Text(
+                                    message.replyToSenderName ?: "Reply",
+                                    style = typo().labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isSelf) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    message.replyToText.orEmpty(),
+                                    style = typo().bodySmall,
+                                    color = if (isSelf) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = message.text,
+                        style = typo().bodyMedium,
+                        color = if (isSelf) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+
+            // Reactions chip list
+            if (message.reactions.isNotEmpty()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .padding(top = 2.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    message.reactions.forEach { emoji ->
+                        Text(
+                            text = emoji,
+                            style = typo().bodySmall.copy(fontSize = 13.sp),
+                            modifier = Modifier.clickable { onReact(emoji) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmojiReactionSelector(
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val emojis = listOf("❤️", "👍", "🔥", "😂", "😮", "😢", "🎉")
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        emojis.forEach { emoji ->
+            Text(
+                text = emoji,
+                style = typo().titleMedium.copy(fontSize = 22.sp),
+                modifier =
+                    Modifier
+                        .clip(CircleShape)
+                        .clickable { onSelect(emoji) }
+                        .padding(4.dp),
             )
         }
-        TextAction(
-            icon = SimpIcons.Settings,
-            text = stringResource(Res.string.settings),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            onClick = onSettings,
-        )
     }
 }
 
-@Composable
-private fun TextAction(
-    icon: ImageVector,
-    text: String,
-    color: Color,
-    onClick: () -> Unit,
-) {
-    // A real Material button, not a Row with clickable on it: that hand-rolled version had no
-    // ripple, no pressed state and no guaranteed minimum touch target.
-    FilledTonalButton(
-        onClick = onClick,
-        shape = CircleShape,
-        colors =
-            ButtonDefaults.filledTonalButtonColors(
-                containerColor = color.copy(alpha = 0.12f),
-                contentColor = color,
-            ),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = typo().bodyMedium)
-    }
-}
+// ─────────────────────── Enhanced Member Action Menu ───────────────────────
 
 @Composable
-private fun MemberActionDialog(
+private fun EnhancedMemberActionDialog(
     member: RoomMember,
     onTransferHost: () -> Unit,
     onKick: () -> Unit,
@@ -969,61 +1813,101 @@ private fun MemberActionDialog(
         Column(
             modifier =
                 Modifier
-                    .width(320.dp)
+                    .width(340.dp)
                     .clip(CARD_SHAPE)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(20.dp),
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CARD_SHAPE)
+                    .padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Avatar(initialOf(member.username), tintFor(member.userId), 40.dp)
-                Text(
-                    member.username,
-                    style = typo().titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Avatar(
+                    name = initialOf(member.username),
+                    background = tintFor(member.userId),
+                    size = 48.dp,
+                    imageUrl = member.avatarUrl,
                 )
+                Column {
+                    Text(
+                        member.username,
+                        style = typo().titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        if (member.isHost) "Room Host" else "Participant",
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            Spacer(Modifier.height(16.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogAction(
-                    stringResource(Res.string.lt_transfer_host),
-                    stringResource(Res.string.lt_transfer_host_desc),
-                    MaterialTheme.colorScheme.onSurface,
-                    onTransferHost,
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                EnhancedDialogAction(
+                    title = "Make host",
+                    subtitle = "They will control playback",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    onClick = onTransferHost,
                 )
-                DialogAction(
-                    stringResource(Res.string.lt_kick),
-                    stringResource(Res.string.lt_kick_desc),
-                    MaterialTheme.colorScheme.error,
-                    onKick,
+                EnhancedDialogAction(
+                    title = "Remove from Jam",
+                    subtitle = "They can rejoin with the code",
+                    tint = Color(0xFFEF9A9A),
+                    onClick = onKick,
                 )
-                DialogAction(
-                    stringResource(Res.string.lt_block),
-                    stringResource(Res.string.lt_block_desc),
-                    MaterialTheme.colorScheme.error,
-                    onBlock,
+                EnhancedDialogAction(
+                    title = "Block permanently",
+                    subtitle = "They cannot rejoin, even with the code",
+                    tint = Color(0xFFFF8A80),
+                    onClick = onBlock,
                 )
             }
         }
     }
 }
 
-// ───────────────────────────────── building blocks ─────────────────────────────────
-
-/** One card. Every panel on this screen is one of these, so they cannot drift apart. */
 @Composable
-private fun Surface(
+private fun EnhancedDialogAction(
+    title: String,
+    subtitle: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(ROW_SHAPE)
+                .background(tint.copy(alpha = 0.05f))
+                .border(1.dp, tint.copy(alpha = 0.28f), ROW_SHAPE)
+                .clickable { onClick() }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Text(title, style = typo().bodyMedium.copy(fontWeight = FontWeight.Bold), color = tint)
+        Spacer(Modifier.height(2.dp))
+        Text(subtitle, style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+
+
+@Composable
+private fun JamCard(
     tint: Color? = null,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clip(CARD_SHAPE)
                 .background(
-                    tint?.copy(alpha = 0.07f) ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.06f),
+                    tint?.copy(alpha = 0.08f) ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.06f),
                 ).border(
                     1.dp,
                     tint?.copy(alpha = 0.22f) ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
@@ -1038,33 +1922,62 @@ private fun SectionHeader(
     count: Int,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        modifier = Modifier.padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, style = typo().titleSmall, color = MaterialTheme.colorScheme.onBackground)
+        Text(title, style = typo().titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
         Box(
             Modifier
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
                 .padding(horizontal = 8.dp, vertical = 1.dp),
         ) {
-            Text("$count", style = typo().labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text("$count", style = typo().labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
         }
     }
 }
 
 @Composable
 private fun Avatar(
-    letter: String,
+    name: String,
     background: Color,
-    size: androidx.compose.ui.unit.Dp,
+    size: Dp = 40.dp,
+    imageUrl: String? = null,
 ) {
-    Box(
-        modifier = Modifier.size(size).clip(CircleShape).background(background.copy(alpha = 0.9f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(letter, style = typo().titleSmall, color = MaterialTheme.colorScheme.surface)
+    if (!imageUrl.isNullOrBlank()) {
+        Box(
+            modifier =
+                Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(background.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model =
+                    ImageRequest
+                        .Builder(LocalPlatformContext.current)
+                        .data(imageUrl)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .crossfade(true)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(CircleShape),
+            )
+        }
+    } else {
+        Box(
+            modifier = Modifier.size(size).clip(CircleShape).background(background.copy(alpha = 0.9f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = name,
+                style = typo().titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp),
+                color = Color.White,
+            )
+        }
     }
 }
 
@@ -1091,15 +2004,15 @@ private fun Chip(
     ) {
         Text(
             text,
-            style = typo().labelMedium,
-            color = if (filled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = typo().labelMedium.copy(fontWeight = if (filled) FontWeight.Bold else FontWeight.Normal),
+            color = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
 @Composable
 private fun GlyphButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     onClick: () -> Unit,
 ) {
     Box(
@@ -1117,7 +2030,7 @@ private fun GlyphButton(
 
 @Composable
 private fun ActionGlyph(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     tint: Color,
     onClick: () -> Unit,
 ) {
@@ -1146,9 +2059,6 @@ private fun PrimaryButton(
                 .fillMaxWidth()
                 .height(52.dp)
                 .clip(CircleShape)
-                // primary/onPrimary, never primary/surface: on the light theme `surface` is nearly
-                // white and the filled button became white text on pale cyan. onPrimary is generated
-                // against primary, so it is the only text colour guaranteed to survive both themes.
                 .background(
                     if (enabled) {
                         MaterialTheme.colorScheme.primary
@@ -1160,7 +2070,7 @@ private fun PrimaryButton(
     ) {
         Text(
             text,
-            style = typo().titleSmall,
+            style = typo().titleSmall.copy(fontWeight = FontWeight.Bold),
             color =
                 if (enabled) {
                     MaterialTheme.colorScheme.onPrimary
@@ -1189,53 +2099,9 @@ private fun SecondaryButton(
     ) {
         Text(
             text,
-            style = typo().titleSmall,
+            style = typo().titleSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = if (enabled) 1f else 0.4f),
         )
-    }
-}
-
-@Composable
-private fun DangerButton(
-    text: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(CircleShape)
-                .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f), CircleShape)
-                .clickable { onClick() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = typo().titleSmall, color = MaterialTheme.colorScheme.error)
-    }
-}
-
-@Composable
-private fun DialogAction(
-    title: String,
-    subtitle: String,
-    tint: Color,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(ROW_SHAPE)
-                .border(1.dp, tint.copy(alpha = 0.25f), ROW_SHAPE)
-                .clickable { onClick() }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Text(title, style = typo().bodyMedium, color = tint)
-        Text(subtitle, style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1281,10 +2147,8 @@ private fun CodeInput(
     onCodeChange: (String) -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
-    // TextFieldValue, not String: a plain String re-places the caret at index 0 on every
-    // externally-driven recomposition, and backspace at index 0 deletes nothing — the field takes
-    // characters and then refuses to give them back.
     val fieldValue = TextFieldValue(text = code, selection = TextRange(code.length))
+    val displaySlots = 6
 
     BasicTextField(
         value = fieldValue,
@@ -1295,13 +2159,10 @@ private fun CodeInput(
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
         decorationBox = { innerTextField ->
-            // Zero-sized but composed: without it nothing holds the cursor and the field takes no
-            // input at all.
             Box(Modifier.size(0.dp)) { innerTextField() }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                repeat(ROOM_CODE_LENGTH) { index ->
+                repeat(displaySlots) { index ->
                     val filled = index < code.length
-                    // The caret is drawn by hand because the field that owns it is zero-sized.
                     val isCaret = index == code.length
                     Box(
                         modifier =
@@ -1325,4 +2186,435 @@ private fun CodeInput(
             }
         },
     )
+}
+
+@Composable
+private fun TitleBlock(inRoom: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "Jam",
+            style = typo().titleLarge.copy(fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        if (!inRoom) {
+            Text(
+                text = stringResource(Res.string.lt_tagline),
+                style = typo().bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoomCodePoster(
+    state: ListenTogetherRoom,
+    selfAvatar: String?,
+    onCopyCode: () -> Unit,
+    onShareCode: () -> Unit,
+    onLeaveJam: () -> Unit,
+    onManageMember: (RoomMember) -> Unit,
+    onOpenAllMembers: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            // Left: Room code
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text =
+                        if (state.isHost) {
+                            stringResource(Res.string.lt_room_code)
+                        } else {
+                            stringResource(Res.string.lt_in_room)
+                        },
+                    style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text =
+                        state.roomCode
+                            ?.chunked(3)
+                            ?.joinToString(" ")
+                            .orEmpty(),
+                    style =
+                        typo().titleLarge.copy(
+                            fontSize = 32.sp,
+                            lineHeight = 36.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp,
+                        ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+
+            // Right: Up to 3 Google head circles + "..." if > 3 members
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val displayedMembers = state.members.take(3)
+                val hasMore = state.members.size > 3
+
+                displayedMembers.forEach { member ->
+                    val isSelf = member.userId == state.selfUserId
+                    val avatarUrl = member.avatarUrl ?: if (isSelf) selfAvatar else null
+                    val displayName = member.username.ifBlank { "User" }
+
+                    Box(
+                        modifier =
+                            Modifier
+                                .clip(CircleShape)
+                                .clickable { onManageMember(member) },
+                    ) {
+                        Avatar(
+                            name = initialOf(displayName),
+                            background = tintFor(member.userId),
+                            size = 38.dp,
+                            imageUrl = avatarUrl,
+                        )
+                        // Live status dot
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .size(11.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .padding(1.5.dp),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(
+                                        when {
+                                            member.isBuffering -> MaterialTheme.colorScheme.tertiary
+                                            member.isConnected -> Color(0xFF4CAF50)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    ),
+                            )
+                        }
+                    }
+                }
+
+                if (hasMore) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+                                .clickable { onOpenAllMembers() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "...",
+                            style = typo().titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            Text(
+                text =
+                    if (state.isHost) {
+                        "You are the host · ${state.members.size} in Jam"
+                    } else {
+                        "${state.members.firstOrNull { it.isHost }?.username.orEmpty()} is controlling playback"
+                    },
+                style = typo().bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Action Buttons Row: Copy & Share on left (if host), Leave Jam on rightmost
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            if (state.isHost) {
+                var copied by remember { mutableStateOf(false) }
+                LaunchedEffect(copied) {
+                    if (copied) {
+                        delay(COPIED_FEEDBACK_MS)
+                        copied = false
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Crossfade(targetState = copied, label = "ltCopied") { done ->
+                        GlyphButton(if (done) SimpIcons.Check else SimpIcons.ContentCopy) {
+                            onCopyCode()
+                            copied = true
+                        }
+                    }
+                    GlyphButton(SimpIcons.Share, onShareCode)
+                }
+            } else {
+                Spacer(Modifier.width(1.dp))
+            }
+
+            FilledTonalButton(
+                onClick = onLeaveJam,
+                shape = CircleShape,
+                colors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Icon(SimpIcons.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(Res.string.lt_leave_room),
+                    style = typo().labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllMembersDialog(
+    members: List<RoomMember>,
+    selfId: String,
+    selfAvatar: String?,
+    canManage: Boolean,
+    onManage: (RoomMember) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier =
+                Modifier
+                    .width(340.dp)
+                    .clip(CARD_SHAPE)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CARD_SHAPE)
+                    .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "Jam Members (${members.size})",
+                    style = typo().titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    Icon(SimpIcons.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(members, key = { it.userId }) { member ->
+                    val isSelf = member.userId == selfId
+                    val avatarUrl = member.avatarUrl ?: if (isSelf) selfAvatar else null
+                    val displayName = member.username.ifBlank { "User" }
+
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = canManage && !isSelf) {
+                                    onDismiss()
+                                    onManage(member)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Avatar(
+                            name = initialOf(displayName),
+                            background = tintFor(member.userId),
+                            size = 38.dp,
+                            imageUrl = avatarUrl,
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = if (isSelf) "$displayName (You)" else displayName,
+                                style = typo().bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = if (member.isHost) "Host" else if (member.isConnected) "Connected" else "Disconnected",
+                                style = typo().bodySmall,
+                                color = if (member.isHost) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (canManage && !isSelf) {
+                            Icon(
+                                SimpIcons.MoreVert,
+                                contentDescription = "Manage",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BufferBanner(names: List<String>) {
+    JamCard(tint = MaterialTheme.colorScheme.tertiary) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Text(
+                text = if (names.isEmpty()) "Waiting for everyone" else "Waiting for ${names.joinToString(", ")}",
+                style = typo().bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            Text(
+                "Playback resumes when everyone is ready",
+                style = typo().bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun JoinRequests(
+    requests: List<com.maxrave.domain.data.model.listentogether.RoomJoinRequest>,
+    onApprove: (String) -> Unit,
+    onReject: (String) -> Unit,
+) {
+    SectionHeader(stringResource(Res.string.lt_join_requests), requests.size)
+    requests.forEach { request ->
+        JamCard {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Avatar(
+                    initialOf(request.username),
+                    tintFor(request.userId),
+                    40.dp,
+                    imageUrl = request.avatarUrl,
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        request.username,
+                        style = typo().bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        stringResource(Res.string.lt_just_asked),
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                ActionGlyph(SimpIcons.Check, MaterialTheme.colorScheme.primary) { onApprove(request.userId) }
+                ActionGlyph(SimpIcons.Close, MaterialTheme.colorScheme.error) { onReject(request.userId) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Suggestions(
+    suggestions: List<RoomSuggestion>,
+    onApprove: (String) -> Unit,
+    onReject: (String) -> Unit,
+) {
+    SectionHeader(stringResource(Res.string.lt_suggestions), suggestions.size)
+    suggestions.forEach { suggestion ->
+        JamCard {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)),
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        suggestion.track.title,
+                        style = typo().bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${suggestion.fromUsername} suggested",
+                        style = typo().bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                ActionGlyph(SimpIcons.Check, MaterialTheme.colorScheme.primary) { onApprove(suggestion.suggestionId) }
+                ActionGlyph(SimpIcons.Close, MaterialTheme.colorScheme.error) { onReject(suggestion.suggestionId) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaitingForApproval(
+    code: String,
+    onCancel: () -> Unit,
+) {
+    JamCard(tint = MaterialTheme.colorScheme.tertiary) {
+        Column(
+            Modifier.fillMaxWidth().padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                stringResource(Res.string.lt_waiting_approval),
+                style = typo().titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            Text(
+                code.chunked(3).joinToString("  "),
+                style = typo().titleMedium.copy(fontFamily = FontFamily.Monospace, letterSpacing = 3.sp, fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                stringResource(Res.string.lt_waiting_approval_desc),
+                style = typo().bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(
+                text = stringResource(Res.string.lt_cancel_join),
+                enabled = true,
+                onClick = onCancel,
+            )
+        }
+    }
 }

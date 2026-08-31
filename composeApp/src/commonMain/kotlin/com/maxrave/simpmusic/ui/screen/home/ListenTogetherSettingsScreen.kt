@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.home
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,23 +25,21 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,7 +53,7 @@ import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
-import com.maxrave.simpmusic.ui.icon.Check
+import com.maxrave.simpmusic.ui.icon.Logout
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.ListenTogetherSettingsViewModel
@@ -67,48 +66,47 @@ import simpmusic.composeapp.generated.resources.lt_auto_approve_joins
 import simpmusic.composeapp.generated.resources.lt_auto_approve_joins_desc
 import simpmusic.composeapp.generated.resources.lt_blocked
 import simpmusic.composeapp.generated.resources.lt_blocked_empty
-import simpmusic.composeapp.generated.resources.lt_custom_server
-import simpmusic.composeapp.generated.resources.lt_custom_server_desc
-import simpmusic.composeapp.generated.resources.lt_default_server_location
-import simpmusic.composeapp.generated.resources.lt_default_server_name
-import simpmusic.composeapp.generated.resources.lt_save_server
-import simpmusic.composeapp.generated.resources.lt_server
+import simpmusic.composeapp.generated.resources.lt_end_room
+import simpmusic.composeapp.generated.resources.lt_jam_allow_play_direct
+import simpmusic.composeapp.generated.resources.lt_jam_allow_play_direct_desc
+import simpmusic.composeapp.generated.resources.lt_jam_allow_play_pause
+import simpmusic.composeapp.generated.resources.lt_jam_allow_play_pause_desc
+import simpmusic.composeapp.generated.resources.lt_jam_allow_queue
+import simpmusic.composeapp.generated.resources.lt_jam_allow_queue_desc
+import simpmusic.composeapp.generated.resources.lt_jam_allow_reorder
+import simpmusic.composeapp.generated.resources.lt_jam_allow_reorder_desc
+import simpmusic.composeapp.generated.resources.lt_jam_allow_seek
+import simpmusic.composeapp.generated.resources.lt_jam_allow_seek_desc
+import simpmusic.composeapp.generated.resources.lt_jam_settings
+import simpmusic.composeapp.generated.resources.lt_jam_settings_desc
+import simpmusic.composeapp.generated.resources.lt_leave_room
 import simpmusic.composeapp.generated.resources.lt_unblock
 
-/** Matches ListenTogetherScreen — a phone-width column, centred in a wide window. */
-private const val CONTENT_MAX_WIDTH_DP = 560
+/** Generous width for settings on tablets / wide screens. */
+private const val CONTENT_MAX_WIDTH_DP = 640
+private val CARD_SHAPE = RoundedCornerShape(20.dp)
 
-/**
- * Listen Together settings, following the "Cài đặt" artboard.
- *
- * The blocklist is **client-side and by name**. The protocol has `kick_user` but no ban, and the
- * server hands out a fresh `user_<nanotime>_<rand>` id on every connection, so there is no stable
- * identity to block on — a name is the only thing that persists across reconnects, and a determined
- * person can change it. It is a convenience, not a security control.
- */
 @Composable
 fun ListenTogetherSettingsScreen(
     navController: NavController,
     innerPadding: PaddingValues,
     viewModel: ListenTogetherSettingsViewModel = koinViewModel(),
 ) {
-    val usingCustom by viewModel.usingCustomServer.collectAsStateWithLifecycle()
-    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
+    val room by viewModel.room.collectAsStateWithLifecycle()
     val autoJoins by viewModel.autoApproveJoins.collectAsStateWithLifecycle()
     val blocked by viewModel.blockedNames.collectAsStateWithLifecycle()
 
-    var draftUrl by remember(serverUrl) { mutableStateOf(serverUrl) }
+    val jamAllowQueue by viewModel.jamAllowQueue.collectAsStateWithLifecycle()
+    val jamAllowReorder by viewModel.jamAllowReorder.collectAsStateWithLifecycle()
+    val jamAllowPlayDirect by viewModel.jamAllowPlayDirect.collectAsStateWithLifecycle()
+    val jamAllowSeek by viewModel.jamAllowSeek.collectAsStateWithLifecycle()
+    val jamAllowPlayPause by viewModel.jamAllowPlayPause.collectAsStateWithLifecycle()
 
     val backdrop = rememberBackdrop(MaterialTheme.colorScheme.background)
 
-    // See ListenTogetherScreen: measure the space actually given, not the window.
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val contentWidth = minOf(maxWidth.value, CONTENT_MAX_WIDTH_DP.toFloat()).dp
 
-        // The same ambient ground as the main Listen Together page — theme-primary glow painted
-        // inside the backdrop source, so the glass back button has something to refract. See the
-        // long note there for why the source is a matchParentSize sibling and the button must
-        // stay outside it.
         val bg = MaterialTheme.colorScheme.background
         val glow =
             if (bg.luminance() > 0.5f) {
@@ -142,7 +140,7 @@ fun ListenTogetherSettingsScreen(
                     .padding(innerPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Full-width header — see ListenTogetherScreen; only the content below is capped.
+            // Full-width header
             Row(
                 modifier =
                     Modifier
@@ -152,13 +150,10 @@ fun ListenTogetherSettingsScreen(
                         .padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // The back button FLOATS over this strip (end of BoxWithConstraints) so it stays
-                // put while the page scrolls — in this row it scrolled away with the page. This
-                // spacer and its twin below only keep the title centred over the hole it leaves.
                 Spacer(Modifier.width(48.dp))
                 Text(
                     text = stringResource(Res.string.listen_together),
-                    style = typo().titleMedium,
+                    style = typo().titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
@@ -166,114 +161,164 @@ fun ListenTogetherSettingsScreen(
                 Spacer(Modifier.width(48.dp))
             }
 
-            // Only the content is capped; the header above stays full width.
             Column(
-                modifier = Modifier.width(contentWidth).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(26.dp),
+                modifier =
+                    Modifier
+                        .width(contentWidth)
+                        .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    SectionTitle(stringResource(Res.string.lt_server))
-
-                    ServerOption(
-                        title = stringResource(Res.string.lt_default_server_name),
-                        subtitle = stringResource(Res.string.lt_default_server_location),
-                        selected = !usingCustom,
-                        onClick = { viewModel.useDefaultServer() },
-                    )
-                    ServerOption(
-                        title = stringResource(Res.string.lt_custom_server),
-                        subtitle = stringResource(Res.string.lt_custom_server_desc),
-                        selected = usingCustom,
-                        onClick = { if (!usingCustom) viewModel.setServerUrl(draftUrl.ifBlank { "wss://" }) },
-                    )
-
-                    BasicTextField(
-                        value = draftUrl,
-                        onValueChange = { draftUrl = it },
-                        singleLine = true,
-                        textStyle = typo().bodyMedium.copy(color = MaterialTheme.colorScheme.onBackground),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.20f), RoundedCornerShape(14.dp)),
-                        decorationBox = { inner ->
-                            Box(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 15.dp),
-                                contentAlignment = Alignment.CenterStart,
-                            ) {
-                                if (draftUrl.isEmpty()) {
-                                    Text("wss://…", style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                inner()
-                            }
-                        },
-                    )
-                    // Committing on focus loss would silently store a half-typed address, so the value
-                    // is only written when the user asks for it.
-                    if (draftUrl != serverUrl) {
-                        SmallAction(text = stringResource(Res.string.lt_save_server)) { viewModel.setServerUrl(draftUrl) }
-                    }
-                }
-
-                HLine()
-
-                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    SectionTitle(stringResource(Res.string.lt_as_host))
-                    ToggleRow(
-                        title = stringResource(Res.string.lt_auto_approve_joins),
-                        subtitle = stringResource(Res.string.lt_auto_approve_joins_desc),
-                        checked = autoJoins,
-                        onCheckedChange = { viewModel.setAutoApproveJoins(it) },
-                    )
-                }
-
-                HLine()
-
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        SectionTitle(stringResource(Res.string.lt_blocked))
-                        Text("${blocked.size}", style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (blocked.isEmpty()) {
-                        Text(
-                            stringResource(Res.string.lt_blocked_empty),
-                            style = typo().bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // ── When you host ─────────────────────────────────────────────
+                SettingCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        SectionTitle(stringResource(Res.string.lt_as_host))
+                        ToggleRow(
+                            title = stringResource(Res.string.lt_auto_approve_joins),
+                            subtitle = stringResource(Res.string.lt_auto_approve_joins_desc),
+                            checked = autoJoins,
+                            onCheckedChange = { viewModel.setAutoApproveJoins(it) },
                         )
-                    } else {
-                        blocked.forEach { name ->
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .size(
-                                                40.dp,
-                                            ).clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
+                    }
+                }
+
+                // ── Jam Permissions ───────────────────────────────────────────
+                SettingCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            SectionTitle(stringResource(Res.string.lt_jam_settings))
+                            Text(
+                                stringResource(Res.string.lt_jam_settings_desc),
+                                style = typo().bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        ToggleRow(
+                            title = stringResource(Res.string.lt_jam_allow_queue),
+                            subtitle = stringResource(Res.string.lt_jam_allow_queue_desc),
+                            checked = jamAllowQueue,
+                            onCheckedChange = { viewModel.setJamAllowQueue(it) },
+                        )
+
+                        ToggleRow(
+                            title = stringResource(Res.string.lt_jam_allow_reorder),
+                            subtitle = stringResource(Res.string.lt_jam_allow_reorder_desc),
+                            checked = jamAllowReorder,
+                            onCheckedChange = { viewModel.setJamAllowReorder(it) },
+                        )
+
+                        ToggleRow(
+                            title = stringResource(Res.string.lt_jam_allow_play_direct),
+                            subtitle = stringResource(Res.string.lt_jam_allow_play_direct_desc),
+                            checked = jamAllowPlayDirect,
+                            onCheckedChange = { viewModel.setJamAllowPlayDirect(it) },
+                        )
+
+                        ToggleRow(
+                            title = stringResource(Res.string.lt_jam_allow_seek),
+                            subtitle = stringResource(Res.string.lt_jam_allow_seek_desc),
+                            checked = jamAllowSeek,
+                            onCheckedChange = { viewModel.setJamAllowSeek(it) },
+                        )
+
+                        ToggleRow(
+                            title = stringResource(Res.string.lt_jam_allow_play_pause),
+                            subtitle = stringResource(Res.string.lt_jam_allow_play_pause_desc),
+                            checked = jamAllowPlayPause,
+                            onCheckedChange = { viewModel.setJamAllowPlayPause(it) },
+                        )
+                    }
+                }
+
+                // ── Blocked ───────────────────────────────────────────────────
+                SettingCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SectionTitle(stringResource(Res.string.lt_blocked))
+                            Text("${blocked.size}", style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (blocked.isEmpty()) {
+                            Text(
+                                stringResource(Res.string.lt_blocked_empty),
+                                style = typo().bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            blocked.forEach { name ->
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            name.trim().firstOrNull()?.uppercase() ?: "?",
+                                            style = typo().titleSmall,
+                                            color = MaterialTheme.colorScheme.surface,
+                                        )
+                                    }
                                     Text(
-                                        name.trim().firstOrNull()?.uppercase() ?: "?",
-                                        style = typo().titleSmall,
-                                        color = MaterialTheme.colorScheme.surface,
+                                        name,
+                                        style = typo().bodyMedium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
                                     )
+                                    SmallAction(text = stringResource(Res.string.lt_unblock)) { viewModel.unblock(name) }
                                 }
-                                Text(
-                                    name,
-                                    style = typo().bodyMedium,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                SmallAction(text = stringResource(Res.string.lt_unblock)) { viewModel.unblock(name) }
+                            }
+                        }
+                    }
+                }
+
+                // ── Session controls (when in room) ───────────────────────────
+                AnimatedVisibility(visible = room.inRoom) {
+                    SettingCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            SectionTitle("Active Jam Session")
+                            if (room.isHost) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        viewModel.endRoom()
+                                        navController.navigateUp()
+                                    },
+                                    shape = CircleShape,
+                                    colors =
+                                        ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+                                            contentColor = MaterialTheme.colorScheme.error,
+                                        ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(SimpIcons.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(Res.string.lt_end_room), style = typo().bodyMedium)
+                                }
+                            }
+                            FilledTonalButton(
+                                onClick = {
+                                    viewModel.leaveRoom()
+                                    navController.navigateUp()
+                                },
+                                shape = CircleShape,
+                                colors =
+                                    ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f),
+                                        contentColor = MaterialTheme.colorScheme.onBackground,
+                                    ),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(SimpIcons.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(Res.string.lt_leave_room), style = typo().bodyMedium)
                             }
                         }
                     }
@@ -283,8 +328,6 @@ fun ListenTogetherSettingsScreen(
             }
         }
 
-        // Floats over the strip the header row reserves — a sibling of both the scroll column and
-        // the backdrop source, exactly the arrangement the main Listen Together page uses.
         LiquidGlassIconButton(
             backdrop = backdrop,
             imageVector = SimpIcons.ArrowBackIosNew,
@@ -303,66 +346,23 @@ fun ListenTogetherSettingsScreen(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = typo().titleSmall, color = MaterialTheme.colorScheme.onBackground)
-}
-
-@Composable
-private fun ServerOption(
-    title: String,
-    subtitle: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
+private fun SettingCard(content: @Composable () -> Unit) {
+    Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)) else Modifier)
-                .border(
-                    1.dp,
-                    if (selected) {
-                        MaterialTheme.colorScheme.primary.copy(
-                            alpha = 0.40f,
-                        )
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.20f)
-                    },
-                    RoundedCornerShape(16.dp),
-                ).clickable { onClick() }
-                .padding(15.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(13.dp),
+                .clip(CARD_SHAPE)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.05f))
+                .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f), CARD_SHAPE)
+                .padding(20.dp),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .then(
-                        if (selected) {
-                            Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-                        } else {
-                            Modifier.border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.26f), CircleShape)
-                        },
-                    ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (selected) {
-                Icon(SimpIcons.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-            }
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                title,
-                style = typo().bodyMedium,
-                color = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(subtitle, style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        content()
     }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, style = typo().titleSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onBackground)
 }
 
 @Composable
@@ -373,13 +373,18 @@ private fun ToggleRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onCheckedChange(!checked) }
+                .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(Modifier.height(3.dp))
+            Text(title, style = typo().bodyMedium.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(2.dp))
             Text(subtitle, style = typo().bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         LtSwitch(checked = checked)
@@ -404,8 +409,6 @@ private fun LtSwitch(checked: Boolean) {
                     .offset(x = thumbOffset)
                     .size(20.dp)
                     .clip(CircleShape)
-                    // onPrimary over the filled track, surface over the grey one — a fixed white
-                    // thumb disappears into the light theme's track.
                     .background(
                         if (checked) {
                             MaterialTheme.colorScheme.onPrimary
@@ -425,18 +428,13 @@ private fun SmallAction(
     Box(
         modifier =
             Modifier
-                .height(30.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f), RoundedCornerShape(15.dp))
+                .height(32.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f), RoundedCornerShape(16.dp))
                 .clickable { onClick() }
-                .padding(horizontal = 13.dp),
+                .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, style = typo().labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-}
-
-@Composable
-private fun HLine() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f)))
 }
