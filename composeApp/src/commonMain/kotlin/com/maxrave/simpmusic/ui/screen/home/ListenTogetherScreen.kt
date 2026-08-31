@@ -2,15 +2,12 @@ package com.maxrave.simpmusic.ui.screen.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -21,7 +18,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -64,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -82,7 +79,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
@@ -394,7 +390,7 @@ fun ListenTogetherScreen(
         }
 
         // Floating bottom toast notification (auto-dismiss after 2.8s)
-        androidx.compose.animation.AnimatedVisibility(
+        AnimatedVisibility(
             visible = toastNotification != null,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it },
@@ -837,15 +833,16 @@ private fun JamNowPlayingCard(
 @Composable
 private fun JamQueueSection(
     queue: List<RoomTrack>,
-    isHost: Boolean = false,
-    jamAutoplay: Boolean = true,
     canQueue: Boolean,
     canReorder: Boolean,
     onAddClick: () -> Unit,
-    onToggleAutoplay: () -> Unit = {},
     onReorder: (Int, Int) -> Unit,
     onRequeue: (RoomTrack) -> Unit,
     onRemove: (Int, RoomTrack) -> Unit,
+    modifier: Modifier = Modifier,
+    isHost: Boolean = false,
+    jamAutoplay: Boolean = true,
+    onToggleAutoplay: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -1136,6 +1133,31 @@ private fun SwipeableQueueCard(
     }
 }
 
+@Composable
+private fun QueuedBadge() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Icon(
+            SimpIcons.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(13.dp),
+        )
+        Text(
+            "Queued",
+            style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddSongToJamSheet(
@@ -1279,31 +1301,7 @@ private fun AddSongToJamSheet(
                                     track = song.toTrack(),
                                     isPlaying = false,
                                     modifier = Modifier,
-                                    rightView = if (isQueued) {
-                                        {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                                modifier =
-                                                    Modifier
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                            ) {
-                                                Icon(
-                                                    SimpIcons.Check,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(13.dp),
-                                                )
-                                                Text(
-                                                    "Queued",
-                                                    style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                )
-                                            }
-                                        }
-                                    } else null,
+                                    rightView = if (isQueued) { { QueuedBadge() } } else null,
                                     onAddToQueue = { _ ->
                                         onQueueSongResult(song)
                                         triggerQueueToast(song.title.orEmpty())
@@ -1353,31 +1351,7 @@ private fun AddSongToJamSheet(
                                         track = track.toTrack(),
                                         isPlaying = false,
                                         modifier = Modifier,
-                                        rightView = if (isQueued) {
-                                            {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                                    modifier =
-                                                        Modifier
-                                                            .clip(CircleShape)
-                                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                ) {
-                                                    Icon(
-                                                        SimpIcons.Check,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(13.dp),
-                                                    )
-                                                    Text(
-                                                        "Queued",
-                                                        style = typo().labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                    )
-                                                }
-                                            }
-                                        } else null,
+                                        rightView = if (isQueued) { { QueuedBadge() } } else null,
                                         onAddToQueue = { _ ->
                                             onQueueTrack(track)
                                             triggerQueueToast(track.title)
@@ -1414,7 +1388,7 @@ private fun AddSongToJamSheet(
             }
 
             // Bottom toast notification when a song is queued
-            androidx.compose.animation.AnimatedVisibility(
+            AnimatedVisibility(
                 visible = queuedNotification != null,
                 enter = fadeIn() + slideInVertically { it },
                 exit = fadeOut() + slideOutVertically { it },
@@ -1962,8 +1936,8 @@ private fun EnhancedDialogAction(
 
 @Composable
 private fun JamCard(
-    tint: Color? = null,
     modifier: Modifier = Modifier,
+    tint: Color? = null,
     content: @Composable () -> Unit,
 ) {
     Box(
