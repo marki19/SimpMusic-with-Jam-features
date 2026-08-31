@@ -177,10 +177,9 @@ class ListenTogetherViewModel(
                 val resource =
                     songRepository
                         .getRelatedData(currentTrack.id)
-                        .firstOrNull { it is Resource.Success<*> || it is Resource.Error<*> }
-                if (resource is Resource.Success<*>) {
-                    @Suppress("UNCHECKED_CAST")
-                    val pair = resource.data as? Pair<List<Track>, String?>
+                        .firstOrNull { it is Resource.Success || it is Resource.Error }
+                if (resource is Resource.Success) {
+                    val pair = resource.data
                     val currentQueueIds = (listOf(currentTrack.id) + repository.room.value.queue.map { it.id }).toSet()
                     val candidates =
                         pair?.first.orEmpty()
@@ -220,7 +219,7 @@ class ListenTogetherViewModel(
         viewModelScope.launch {
             dataStore.putString(ListenTogetherPrefs.JAM_AUTOPLAY, if (value) ListenTogetherPrefs.TRUE else ListenTogetherPrefs.FALSE)
             if (value) {
-                checkAutoplay(repository.room.value, true)
+                checkAutoplay(repository.room.value, value)
             }
         }
     }
@@ -397,7 +396,7 @@ class ListenTogetherViewModel(
                         val homeItems = pair?.second.orEmpty()
                         val tracks =
                             homeItems.flatMap { item ->
-                                item.contents.filterIsInstance<Content>().filter { !it.videoId.isNullOrBlank() }
+                                item.contents.filterNotNull().filter { !it.videoId.isNullOrBlank() }
                             }.distinctBy { it.videoId }.map { content ->
                                 RoomTrack(
                                     id = content.videoId.orEmpty(),
@@ -438,7 +437,7 @@ class ListenTogetherViewModel(
                     val homeItems = pair?.second.orEmpty()
                     val newTracks =
                         homeItems.flatMap { item ->
-                            item.contents.filterIsInstance<Content>().filter { !it.videoId.isNullOrBlank() }
+                            item.contents.filterNotNull().filter { !it.videoId.isNullOrBlank() }
                         }.distinctBy { it.videoId }.map { content ->
                             RoomTrack(
                                 id = content.videoId.orEmpty(),
