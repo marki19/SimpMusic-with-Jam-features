@@ -934,20 +934,16 @@ private fun JamQueueSection(
         }
     } else {
         val lazyListState = rememberLazyListState()
-        var localQueue by remember(queue) { mutableStateOf(queue) }
         val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
-            localQueue = localQueue.toMutableList().apply {
-                add(to.index, removeAt(from.index))
-            }
             onReorder(from.index, to.index)
         }
         LazyColumn(
             state = lazyListState,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(localQueue, key = { _, track -> track.id }) { index, track ->
-                ReorderableItem(reorderableState, key = track.id) { isDragging ->
+            itemsIndexed(queue, key = { index, track -> track.id + "_$index" }) { index, track ->
+                ReorderableItem(reorderableState, key = track.id + "_$index") { _ ->
                     SwipeableQueueCard(
                         track = track,
                         canReorder = canReorder,
