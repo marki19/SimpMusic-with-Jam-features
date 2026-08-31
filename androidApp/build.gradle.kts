@@ -194,17 +194,23 @@ sentry {
     if (isFullBuild) {
         val token =
             try {
-                println("Full build detected, enabling Sentry Auth Token")
                 val properties = Properties()
                 properties.load(rootProject.file("local.properties").inputStream())
                 properties.getProperty("SENTRY_AUTH_TOKEN")
             } catch (e: Exception) {
-                println("Failed to load SENTRY_AUTH_TOKEN from local.properties: ${e.message}")
                 null
-            }
-        authToken.set(token ?: "")
-        includeProguardMapping.set(true)
-        autoUploadProguardMapping.set(true)
+            }?.takeIf { it.isNotBlank() } ?: System.getenv("SENTRY_AUTH_TOKEN")?.takeIf { it.isNotBlank() }
+        val hasValidToken = !token.isNullOrBlank()
+        if (hasValidToken) {
+            println("Full build: Sentry Auth Token found, enabling Proguard mapping upload")
+            authToken.set(token)
+            includeProguardMapping.set(true)
+            autoUploadProguardMapping.set(true)
+        } else {
+            println("Full build: No valid Sentry Auth Token provided, skipping Proguard mapping upload")
+            includeProguardMapping.set(false)
+            autoUploadProguardMapping.set(false)
+        }
     } else {
         includeProguardMapping.set(false)
         autoUploadProguardMapping.set(false)

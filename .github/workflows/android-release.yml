@@ -71,6 +71,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: ./build_and_sign_apk.sh --release --full
 
       - name: Upload APK

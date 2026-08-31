@@ -65,6 +65,8 @@ jobs:
         run: ./gradlew exportLibraryDefinitions
 
       - name: Build release APK
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: ./gradlew androidApp:assembleRelease
 
       - name: Check build-tools version
