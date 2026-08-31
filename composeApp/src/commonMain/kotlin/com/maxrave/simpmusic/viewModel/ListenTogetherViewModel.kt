@@ -297,34 +297,37 @@ class ListenTogetherViewModel(
         viewModelScope.launch {
             _isLoadingRecommendations.value = true
             homeRepository.getHomeData(params = null, viewString = "views", songString = "Song").collectLatest { res ->
-                if (res is Resource.Success) {
-                    val pair = res.data
-                    recommendationsContinuation = pair?.first
-                    val homeItems = pair?.second.orEmpty()
-                    val tracks =
-                        homeItems.flatMap { item ->
-                            item.contents.mapNotNull { it as? Content }.filter { !it.videoId.isNullOrBlank() }
-                        }.distinctBy { it.videoId }.map { content ->
-                            RoomTrack(
-                                id = content.videoId.orEmpty(),
-                                title = content.title,
-                                artist = content.artists?.joinToString(", ") { it.name }.orEmpty().ifBlank { "YouTube Music" },
-                                album = content.album?.name.orEmpty(),
-                                durationMs = (content.durationSeconds ?: 0).toLong() * 1000L,
-                                thumbnail = content.thumbnails.lastOrNull()?.url.orEmpty(),
-                            )
+                when (res) {
+                    is Resource.Success -> {
+                        val pair = res.data
+                        recommendationsContinuation = pair?.first
+                        val homeItems = pair?.second.orEmpty()
+                        val tracks =
+                            homeItems.flatMap { item ->
+                                item.contents.filterIsInstance<Content>().filter { !it.videoId.isNullOrBlank() }
+                            }.distinctBy { it.videoId }.map { content ->
+                                RoomTrack(
+                                    id = content.videoId.orEmpty(),
+                                    title = content.title,
+                                    artist = content.artists?.joinToString(", ") { it.name }.orEmpty().ifBlank { "YouTube Music" },
+                                    album = content.album?.name.orEmpty(),
+                                    durationMs = (content.durationSeconds ?: 0).toLong() * 1000L,
+                                    thumbnail = content.thumbnails.lastOrNull()?.url.orEmpty(),
+                                )
+                            }
+                        if (tracks.isNotEmpty()) {
+                            _recommendedSongs.value = tracks
+                        } else {
+                            _recommendedSongs.value = localLibrarySongs.value.map { it.toRoomTrack() }
                         }
-                    if (tracks.isNotEmpty()) {
-                        _recommendedSongs.value = tracks
-                    } else {
-                        _recommendedSongs.value = localLibrarySongs.value.map { it.toRoomTrack() }
+                        _isLoadingRecommendations.value = false
                     }
-                    _isLoadingRecommendations.value = false
-                } else if (res is Resource.Error) {
-                    if (_recommendedSongs.value.isEmpty()) {
-                        _recommendedSongs.value = localLibrarySongs.value.map { it.toRoomTrack() }
+                    is Resource.Error -> {
+                        if (_recommendedSongs.value.isEmpty()) {
+                            _recommendedSongs.value = localLibrarySongs.value.map { it.toRoomTrack() }
+                        }
+                        _isLoadingRecommendations.value = false
                     }
-                    _isLoadingRecommendations.value = false
                 }
             }
         }
@@ -342,7 +345,7 @@ class ListenTogetherViewModel(
                     val homeItems = pair?.second.orEmpty()
                     val newTracks =
                         homeItems.flatMap { item ->
-                            item.contents.mapNotNull { it as? Content }.filter { !it.videoId.isNullOrBlank() }
+                            item.contents.filterIsInstance<Content>().filter { !it.videoId.isNullOrBlank() }
                         }.distinctBy { it.videoId }.map { content ->
                             RoomTrack(
                                 id = content.videoId.orEmpty(),
@@ -386,11 +389,11 @@ class ListenTogetherViewModel(
     }
 
     fun playDirectInJam(track: RoomTrack) {
-        val state = _state.value
-        val canControl = state.isHost || state.permissions.allowPlayDirect
+        val currentRoom = state.value
+        val canControl = currentRoom.isHost || currentRoom.permissions.allowPlayDirect
         if (!canControl) return
 
-        if (state.isHost) {
+        if (currentRoom.isHost) {
             viewModelScope.launch {
                 mediaPlayerHandler.loadMediaItem(track, "add_songs", null)
             }
@@ -400,11 +403,11 @@ class ListenTogetherViewModel(
     }
 
     fun playDirectInJam(song: SongsResult) {
-        val state = _state.value
-        val canControl = state.isHost || state.permissions.allowPlayDirect
+        val currentRoom = state.value
+        val canControl = currentRoom.isHost || currentRoom.permissions.allowPlayDirect
         if (!canControl) return
 
-        if (state.isHost) {
+        if (currentRoom.isHost) {
             viewModelScope.launch {
                 mediaPlayerHandler.loadMediaItem(song, "add_songs", null)
             }
@@ -426,11 +429,11 @@ class ListenTogetherViewModel(
     }
 
     fun playDirectInJam(song: SongEntity) {
-        val state = _state.value
-        val canControl = state.isHost || state.permissions.allowPlayDirect
+        val currentRoom = state.value
+        val canControl = currentRoom.isHost || currentRoom.permissions.allowPlayDirect
         if (!canControl) return
 
-        if (state.isHost) {
+        if (currentRoom.isHost) {
             viewModelScope.launch {
                 mediaPlayerHandler.loadMediaItem(song, "add_songs", null)
             }
@@ -463,14 +466,12 @@ class ListenTogetherViewModel(
     private fun parseDurationToMs(durationStr: String): Long {
         return try {
             val parts = durationStr.split(":").map { it.trim().toLong() }
-            if (parts.size == 2) {
-                (parts[0] * 60 + parts[1]) * 1000L
-            } else if (parts.size == 3) {
-                (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000L
-            } else {
-                0L
+            when (parts.size) {
+                2 -> (parts[0] * 60 + parts[1]) * 1000L
+                3 -> (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000L
+                else -> 0L
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             0L
         }
     }

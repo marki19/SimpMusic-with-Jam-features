@@ -62,6 +62,9 @@ jobs:
           echo "" >> ./gradle.properties
           echo "isFullBuild=true" >> ./gradle.properties
 
+      - name: Make scripts executable
+        run: chmod +x ./gradlew ./build_and_sign_apk.sh
+
       - name: Build full release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
@@ -103,6 +106,9 @@ jobs:
         run: |
           echo "" >> ./gradle.properties
           echo "isFullBuild=false" >> ./gradle.properties
+
+      - name: Make scripts executable
+        run: chmod +x ./gradlew ./build_and_sign_apk.sh
 
       - name: Build foss release APK
         env:

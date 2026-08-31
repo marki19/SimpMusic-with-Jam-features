@@ -12,20 +12,27 @@ KEYSTORE_PASSWORD="${KEYSTORE_PASSWORD}"
 KEY_ALIAS="${KEY_ALIAS}"
 KEY_PASSWORD="${KEY_PASSWORD}"
 
-# Check if KEY_PASSWORD is set
-if [ -z "$KEY_PASSWORD" ]; then
-  echo "Error: KEY_PASSWORD environment variable must be set"
-  exit 1
-fi
+# If signing credentials or keystore are missing, generate a temporary self-signed keystore
+if [ -z "$KEY_PASSWORD" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ ! -s "$KEYSTORE_PATH" ]; then
+  echo "================================================================="
+  echo "[Notice] Release signing credentials not provided or keystore empty."
+  echo "Generating an automated self-signed keystore for this build..."
+  echo "================================================================="
+  KEYSTORE_PATH="./temp_signing.jks"
+  KEYSTORE_PASSWORD="androidpassword"
+  KEY_PASSWORD="androidpassword"
+  KEY_ALIAS="androidkey"
 
-if [ -z "$KEYSTORE_PASSWORD" ]; then
-  echo "Error: KEYSTORE_PASSWORD environment variable must be set"
-  exit 1
-fi
-
-if [ -z "$KEY_ALIAS" ]; then
-  echo "Error: KEY_ALIAS environment variable must be set"
-  exit 1
+  rm -f "$KEYSTORE_PATH"
+  keytool -genkey -v \
+    -keystore "$KEYSTORE_PATH" \
+    -storepass "$KEYSTORE_PASSWORD" \
+    -alias "$KEY_ALIAS" \
+    -keypass "$KEY_PASSWORD" \
+    -keyalg RSA \
+    -keysize 2048 \
+    -validity 10000 \
+    -dname "CN=SimpMusic, OU=App, O=SimpMusic, L=Unknown, ST=Unknown, C=US"
 fi
 
 

@@ -1,6 +1,6 @@
 name: Feature request
 description: Suggest an improvement or new idea for SimpMusic
-labels: [ "feat:unconfirmed" ]
+labels: ["feat:unconfirmed"]
 
 body:
   - type: markdown
