@@ -158,8 +158,6 @@ import simpmusic.composeapp.generated.resources.lt_suggestions
 import simpmusic.composeapp.generated.resources.lt_tagline
 import simpmusic.composeapp.generated.resources.lt_waiting_approval
 import simpmusic.composeapp.generated.resources.lt_waiting_approval_desc
-import simpmusic.composeapp.generated.resources.lt_you
-import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 private val CARD_SHAPE = RoundedCornerShape(24.dp)
@@ -845,7 +843,7 @@ private fun JamQueueSection(
     onToggleAutoplay: () -> Unit = {},
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -1388,7 +1386,7 @@ private fun AddSongToJamSheet(
             }
 
             // Bottom toast notification when a song is queued
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = queuedNotification != null,
                 enter = fadeIn() + slideInVertically { it },
                 exit = fadeOut() + slideOutVertically { it },
