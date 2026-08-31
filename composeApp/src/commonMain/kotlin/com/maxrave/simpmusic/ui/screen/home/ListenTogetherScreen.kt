@@ -1532,7 +1532,7 @@ private fun JamChatSheet(
                     ) {
                         Text("👋 Welcome to Jam Chat!", style = typo().titleSmall, color = MaterialTheme.colorScheme.onSurface)
                         Text(
-                            "Swipe right to reply • Long-press to react with emoji",
+                            "Swipe to reply • Long-press to react with emoji",
                             style = typo().bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
