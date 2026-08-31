@@ -499,22 +499,26 @@ fun ListenTogetherScreen(
 
     // Member Action Menu Dialog
     managing?.let { member ->
-        EnhancedMemberActionDialog(
-            member = member,
-            onTransferHost = {
-                viewModel.transferHost(member.userId)
-                managing = null
-            },
-            onKick = {
-                viewModel.kickUser(member.userId)
-                managing = null
-            },
-            onBlock = {
-                viewModel.blockAndKick(member.userId, member.username)
-                managing = null
-            },
-            onDismiss = { managing = null },
-        )
+        if (member.userId != state.selfUserId) {
+            EnhancedMemberActionDialog(
+                member = member,
+                onTransferHost = {
+                    viewModel.transferHost(member.userId)
+                    managing = null
+                },
+                onKick = {
+                    viewModel.kickUser(member.userId)
+                    managing = null
+                },
+                onBlock = {
+                    viewModel.blockAndKick(member.userId, member.username)
+                    managing = null
+                },
+                onDismiss = { managing = null },
+            )
+        } else {
+            managing = null
+        }
     }
 }
 
@@ -2277,7 +2281,7 @@ private fun RoomCodePoster(
                         modifier =
                             Modifier
                                 .clip(CircleShape)
-                                .clickable { onManageMember(member) },
+                                .clickable(enabled = state.isHost && !isSelf) { onManageMember(member) },
                     ) {
                         Avatar(
                             name = initialOf(displayName),

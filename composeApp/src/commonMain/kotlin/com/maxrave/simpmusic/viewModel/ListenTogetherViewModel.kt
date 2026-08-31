@@ -132,47 +132,74 @@ class ListenTogetherViewModel(
                 repository.autoApproveSuggestions = it == ListenTogetherPrefs.TRUE
             }
         }
+        viewModelScope.launch {
+            dataStore.getString(ListenTogetherPrefs.BLOCKLIST).collect { blocklistStr ->
+                val blocked =
+                    blocklistStr.orEmpty()
+                        .split(ListenTogetherPrefs.BLOCKLIST_SEPARATOR)
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                repository.isBlockedUser = { name ->
+                    blocked.any { it.equals(name, ignoreCase = true) }
+                }
+            }
+        }
 
         // Jam Autoplay monitor (when Host has Autoplay ON and queue is running low)
         viewModelScope.launch {
-            var isFetchingAutoplay = false
-            var lastAutoplayTrackId: String? = null
             combine(
                 repository.room.map { Triple(it.inRoom && it.isHost, it.currentTrack?.id, it.queue.size) }.distinctUntilChanged(),
                 dataStore.getString(ListenTogetherPrefs.JAM_AUTOPLAY).map { it?.equals(ListenTogetherPrefs.TRUE, true) ?: true },
-            ) { (isHostInRoom, currentTrackId, queueSize), autoplayEnabled ->
-                if (!isHostInRoom || !autoplayEnabled || currentTrackId.isNullOrBlank()) return@combine
-                if (queueSize <= 1 && !isFetchingAutoplay && lastAutoplayTrackId != currentTrackId) {
-                    isFetchingAutoplay = true
-                    lastAutoplayTrackId = currentTrackId
-                    try {
-                        songRepository.getRelatedData(currentTrackId).collect { resource ->
-                            if (resource is Resource.Success) {
-                                val currentQueueIds = repository.room.value.queue.map { it.id }.toSet()
-                                val candidates = resource.data?.first.orEmpty()
-                                    .filter { it.videoId != currentTrackId && it.videoId !in currentQueueIds }
-                                    .take(4)
-                                candidates.forEach { track ->
-                                    addSongToJam(
-                                        RoomTrack(
-                                            id = track.videoId,
-                                            title = track.title,
-                                            artist = track.artists?.joinToString(", ") { a -> a.name }.orEmpty(),
-                                            album = track.album?.name.orEmpty(),
-                                            durationMs = (track.durationSeconds?.toLong() ?: 0L) * 1000L,
-                                            thumbnail = track.thumbnails?.lastOrNull()?.url.orEmpty(),
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    } catch (e: Exception) {
-                        com.maxrave.logger.Logger.e("JamAutoplay", "Failed to fetch autoplay recommendations: ${e.message}")
-                    } finally {
-                        isFetchingAutoplay = false
-                    }
+            ) { (isHostInRoom, currentTrackId, _), autoplayEnabled ->
+                if (isHostInRoom && autoplayEnabled && currentTrackId != null) {
+                    checkAutoplay(repository.room.value, autoplayEnabled)
                 }
             }.collect()
+        }
+    }
+
+    private var isFetchingAutoplay = false
+    private var lastAutoplayTrackId: String? = null
+
+    private fun checkAutoplay(room: ListenTogetherRoom, autoplayEnabled: Boolean) {
+        if (!room.inRoom || !room.isHost || !autoplayEnabled) return
+        val currentTrack = room.currentTrack ?: return
+        if (room.queue.size > 1) return
+        if (isFetchingAutoplay) return
+        if (lastAutoplayTrackId == currentTrack.id && room.queue.isNotEmpty()) return
+
+        isFetchingAutoplay = true
+        lastAutoplayTrackId = currentTrack.id
+        viewModelScope.launch {
+            try {
+                val resource =
+                    songRepository
+                        .getRelatedData(currentTrack.id)
+                        .firstOrNull { it is Resource.Success || it is Resource.Error }
+                if (resource is Resource.Success) {
+                    val currentQueueIds = (listOf(currentTrack.id) + repository.room.value.queue.map { it.id }).toSet()
+                    val candidates =
+                        resource.data?.first.orEmpty()
+                            .filter { it.videoId.isNotBlank() && it.videoId !in currentQueueIds }
+                            .take(4)
+                    candidates.forEach { track ->
+                        addSongToJam(
+                            RoomTrack(
+                                id = track.videoId,
+                                title = track.title,
+                                artist = track.artists?.joinToString(", ") { a -> a.name }.orEmpty(),
+                                album = track.album?.name.orEmpty(),
+                                durationMs = (track.durationSeconds?.toLong() ?: 0L) * 1000L,
+                                thumbnail = track.thumbnails?.lastOrNull()?.url.orEmpty(),
+                            ),
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                com.maxrave.logger.Logger.e("JamAutoplay", "Failed to fetch autoplay recommendations: ${e.message}")
+            } finally {
+                isFetchingAutoplay = false
+            }
         }
     }
 
@@ -188,6 +215,9 @@ class ListenTogetherViewModel(
     fun setJamAutoplay(value: Boolean) {
         viewModelScope.launch {
             dataStore.putString(ListenTogetherPrefs.JAM_AUTOPLAY, if (value) ListenTogetherPrefs.TRUE else ListenTogetherPrefs.FALSE)
+            if (value) {
+                checkAutoplay(repository.room.value, true)
+            }
         }
     }
 
@@ -245,6 +275,7 @@ class ListenTogetherViewModel(
     }
 
     fun kickUser(userId: String) {
+        if (userId == state.value.selfUserId) return
         repository.kickUser(userId)
     }
 
@@ -252,6 +283,7 @@ class ListenTogetherViewModel(
         userId: String,
         username: String,
     ) {
+        if (userId == state.value.selfUserId) return
         viewModelScope.launch {
             val current =
                 dataStore
@@ -449,54 +481,33 @@ class ListenTogetherViewModel(
         val currentRoom = state.value
         val canControl = currentRoom.isHost || currentRoom.permissions.allowPlayDirect
         if (!canControl) return
-
-        if (currentRoom.isHost) {
-            viewModelScope.launch {
-                mediaPlayerHandler.loadMediaItem(track, "add_songs", null)
-            }
-        } else {
-            repository.playTrackDirect(track)
-        }
+        repository.playTrackDirect(track)
     }
 
     fun playDirectInJam(song: SongsResult) {
         val currentRoom = state.value
         val canControl = currentRoom.isHost || currentRoom.permissions.allowPlayDirect
         if (!canControl) return
-
-        if (currentRoom.isHost) {
-            viewModelScope.launch {
-                mediaPlayerHandler.loadMediaItem(song, "add_songs", null)
-            }
-        } else {
-            val durationMs =
-                (song.durationSeconds?.toLong()?.times(1000L))
-                    ?: (song.duration?.let { parseDurationToMs(it) } ?: 0L)
-            val track =
-                RoomTrack(
-                    id = song.videoId,
-                    title = song.title.orEmpty(),
-                    artist = song.artists?.joinToString(", ") { it.name }.orEmpty(),
-                    album = song.album?.name.orEmpty(),
-                    durationMs = durationMs,
-                    thumbnail = song.thumbnails?.lastOrNull()?.url.orEmpty(),
-                )
-            repository.playTrackDirect(track)
-        }
+        val durationMs =
+            (song.durationSeconds?.toLong()?.times(1000L))
+                ?: (song.duration?.let { parseDurationToMs(it) } ?: 0L)
+        val track =
+            RoomTrack(
+                id = song.videoId,
+                title = song.title.orEmpty(),
+                artist = song.artists?.joinToString(", ") { it.name }.orEmpty(),
+                album = song.album?.name.orEmpty(),
+                durationMs = durationMs,
+                thumbnail = song.thumbnails?.lastOrNull()?.url.orEmpty(),
+            )
+        repository.playTrackDirect(track)
     }
 
     fun playDirectInJam(song: SongEntity) {
         val currentRoom = state.value
         val canControl = currentRoom.isHost || currentRoom.permissions.allowPlayDirect
         if (!canControl) return
-
-        if (currentRoom.isHost) {
-            viewModelScope.launch {
-                mediaPlayerHandler.loadMediaItem(song, "add_songs", null)
-            }
-        } else {
-            repository.playTrackDirect(song.toRoomTrack())
-        }
+        repository.playTrackDirect(song.toRoomTrack())
     }
 
     private fun SongEntity.toRoomTrack(): RoomTrack =
