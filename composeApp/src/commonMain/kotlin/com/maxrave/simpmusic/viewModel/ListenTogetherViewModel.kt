@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.maxrave.data.listentogether.ListenTogetherPlaybackBridge
 import com.maxrave.data.listentogether.ListenTogetherPrefs
+import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.listentogether.ListenTogetherRoom
 import com.maxrave.domain.data.model.listentogether.RoomTrack
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -175,11 +177,13 @@ class ListenTogetherViewModel(
                 val resource =
                     songRepository
                         .getRelatedData(currentTrack.id)
-                        .firstOrNull { it is Resource.Success || it is Resource.Error }
-                if (resource is Resource.Success) {
+                        .firstOrNull { it is Resource.Success<*> || it is Resource.Error<*> }
+                if (resource is Resource.Success<*>) {
+                    @Suppress("UNCHECKED_CAST")
+                    val pair = resource.data as? Pair<List<Track>, String?>
                     val currentQueueIds = (listOf(currentTrack.id) + repository.room.value.queue.map { it.id }).toSet()
                     val candidates =
-                        resource.data?.first.orEmpty()
+                        pair?.first.orEmpty()
                             .filter { it.videoId.isNotBlank() && it.videoId !in currentQueueIds }
                             .take(4)
                     candidates.forEach { track ->
