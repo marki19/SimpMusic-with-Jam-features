@@ -329,12 +329,19 @@ class ListenTogetherViewModel(
         }
     }
 
+    fun playQueuedSong(index: Int, track: RoomTrack) {
+        val state = repository.room.value
+        val canControl = state.isHost || state.permissions.allowPlayDirect
+        if (canControl) {
+            repository.playQueuedTrack(index, track)
+        }
+    }
+
     fun skipNext() {
         val currentQueue = repository.room.value.queue
         if (currentQueue.isNotEmpty()) {
             val nextTrack = currentQueue.first()
-            repository.playTrackDirect(nextTrack)
-            repository.removeQueueItem(0)
+            playQueuedSong(0, nextTrack)
         }
     }
 

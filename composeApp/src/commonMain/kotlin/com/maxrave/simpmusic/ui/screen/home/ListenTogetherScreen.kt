@@ -628,15 +628,17 @@ private fun ColumnScope.WorkArea(
                 }
             }
 
-            // 2. Jam Queue Section (with swipe to re-queue / remove)
+            // 2. Jam Queue Section (with swipe to re-queue / remove, and tap to play immediately)
             JamQueueSection(
                 queue = state.queue,
                 isHost = state.isHost,
                 jamAutoplay = jamAutoplay,
                 canQueue = state.isHost || state.permissions.allowQueue,
                 canReorder = state.isHost || state.permissions.allowReorder,
+                canPlayDirect = state.isHost || state.permissions.allowPlayDirect,
                 onAddClick = onOpenAddSongs,
                 onToggleAutoplay = { viewModel.setJamAutoplay(!jamAutoplay) },
+                onPlayTrack = { idx, track -> viewModel.playQueuedSong(idx, track) },
                 onReorder = { from, to -> viewModel.reorderJamQueue(from, to) },
                 onRequeue = { track ->
                     viewModel.addSongToJam(track)
@@ -837,7 +839,9 @@ private fun JamQueueSection(
     queue: List<RoomTrack>,
     canQueue: Boolean,
     canReorder: Boolean,
+    canPlayDirect: Boolean,
     onAddClick: () -> Unit,
+    onPlayTrack: (Int, RoomTrack) -> Unit,
     onReorder: (Int, Int) -> Unit,
     onRequeue: (RoomTrack) -> Unit,
     onRemove: (Int, RoomTrack) -> Unit,
@@ -942,6 +946,8 @@ private fun JamQueueSection(
                     SwipeableQueueCard(
                         track = track,
                         canReorder = canReorder,
+                        canPlay = canPlayDirect,
+                        onClick = { onPlayTrack(index, track) },
                         onRemove = { onRemove(index, track) },
                         onRequeue = { onRequeue(track) },
                         dragModifier = Modifier.draggableHandle(),
@@ -956,6 +962,8 @@ private fun JamQueueSection(
 private fun SwipeableQueueCard(
     track: RoomTrack,
     canReorder: Boolean,
+    canPlay: Boolean = true,
+    onClick: () -> Unit = {},
     onRemove: () -> Unit,
     onRequeue: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1048,6 +1056,9 @@ private fun SwipeableQueueCard(
                     .clip(CARD_SHAPE)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                     .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f), CARD_SHAPE)
+                    .clickable(enabled = canPlay) {
+                        onClick()
+                    }
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
