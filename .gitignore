@@ -54,3 +54,5 @@ sentry.properties
 # Graphify knowledge graph outputs
 graphify-out/
 
+metroserver/
+metroproto/
