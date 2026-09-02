@@ -142,65 +142,6 @@ jobs:
           path: androidApp/build/outputs/apk/release/*.apk
 
   # ---------------------------------------------------------------------------
-  # Desktop Linux build (AppImage) — runs on ubuntu (glibc, native)
-  # ---------------------------------------------------------------------------
-  desktop-linux:
-    name: Desktop Linux x86_64
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: 'recursive'
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: 'gradle'
-
-      - name: Set full build flag
-        run: |
-          cat >> ./gradle.properties << 'EOF'
-
-          isFullBuild=true
-          EOF
-
-      # Conveyor needs a user-key to build. On first run it prompts for a
-      # passphrase; GITHUB_TOKEN is a fine substitute here since it is already
-      # write-scoped and used only to authenticate the Conveyor HTTP requests.
-      - name: Authenticate Conveyor
-        env:
-          CONVEYOR_LICENSE_KEY: ${{ secrets.CONVEYOR_LICENSE_KEY }}
-        run: |
-          mkdir -p ~/.config/conveyor
-          echo "${CONVEYOR_LICENSE_KEY:-oss}" > ~/.config/conveyor/license-key.conf
-
-      - name: Setup mpv natives
-        run: ./gradlew :composeApp:mpvSetupAll --no-configuration-cache
-
-      - name: Write Conveyor config
-        run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
-
-      - name: Build Linux AppImage
-        run: |
-          conveyor --agree-to-license=1 \
-            -Kapp.machines=linux.amd64.glibc \
-            make linux-app
-
-      - name: Package as AppImage
-        run: ./gradlew :desktopApp:packageConveyorAppImage --no-configuration-cache
-
-      - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-linux-appimage
-          path: desktopApp/build/appimage/*.AppImage
-
-  # ---------------------------------------------------------------------------
   # Desktop Windows build (MSIX) — runs on ubuntu (Conveyor can cross-compile)
   # ---------------------------------------------------------------------------
   desktop-windows:
@@ -261,65 +202,6 @@ jobs:
           path: output/*.msix
 
   # ---------------------------------------------------------------------------
-  # Desktop macOS builds — runs on macos-latest (cross-build not supported)
-  # ---------------------------------------------------------------------------
-  desktop-macos:
-    name: Desktop macOS
-    runs-on: macos-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: 'recursive'
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: 'gradle'
-
-      - name: Set full build flag
-        run: |
-          cat >> ./gradle.properties << 'EOF'
-
-          isFullBuild=true
-          EOF
-
-      - name: Authenticate Conveyor
-        env:
-          CONVEYOR_LICENSE_KEY: ${{ secrets.CONVEYOR_LICENSE_KEY }}
-        run: |
-          mkdir -p ~/.config/conveyor
-          echo "${CONVEYOR_LICENSE_KEY:-oss}" > ~/.config/conveyor/license-key.conf
-
-      - name: Setup mpv natives
-        run: ./gradlew :composeApp:mpvSetupAll --no-configuration-cache
-
-      - name: Write Conveyor config
-        run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
-
-      - name: Build macOS Intel
-        run: |
-          conveyor --agree-to-license=1 \
-            -Kapp.machines=mac.amd64 \
-            make unnotarized-mac-zip
-
-      - name: Build macOS Apple Silicon
-        run: |
-          conveyor --agree-to-license=1 \
-            -Kapp.machines=mac.aarch64 \
-            make unnotarized-mac-zip
-
-      - name: Upload macOS zips
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-macos-zip
-          path: output/*.zip
-
-  # ---------------------------------------------------------------------------
   # Publish all artifacts to a GitHub Release
   # ---------------------------------------------------------------------------
   publish:
@@ -327,9 +209,7 @@ jobs:
     needs:
       - android-full
       - android-foss
-      - desktop-linux
       - desktop-windows
-      - desktop-macos
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -358,22 +238,10 @@ jobs:
           name: android-foss-apk
           path: release
 
-      - name: Download Linux AppImage
-        uses: actions/download-artifact@v4
-        with:
-          name: desktop-linux-appimage
-          path: release
-
       - name: Download Windows MSIX
         uses: actions/download-artifact@v4
         with:
           name: desktop-windows-msix
-          path: release
-
-      - name: Download macOS zips
-        uses: actions/download-artifact@v4
-        with:
-          name: desktop-macos-zip
           path: release
 
       - name: List all release files
@@ -396,17 +264,12 @@ jobs:
 
           > ⚠️ **Important**: Android 12+ required for the best experience (blur effects, etc.)
 
-          ### Desktop
+          ### Windows
 
-          | Platform | Architecture | Download |
-          |----------|-------------|----------|
-          | **Windows** | x86_64 | `SimpMusic-*.msix` (Windows 10+) |
-          | **macOS** | Intel | `SimpMusic-*-mac-amd64.zip` |
-          | **macOS** | Apple Silicon | `SimpMusic-*-mac-aarch64.zip` |
-          | **Linux** | x86_64 | `SimpMusic-x86_64.AppImage` |
+          | Architecture | Download |
+          |----------|-------------|
+          | x86_64 | `SimpMusic-*.msix` (Windows 10+) |
 
-          > **Note for Linux**: Make the AppImage executable (`chmod +x SimpMusic-x86_64.AppImage`) and run it.
-          >
           > **Note for Windows**: Enable "Sideload apps" in Windows Settings → For developers, then double-click the `.msix` to install.
 
           ### Release Notes
