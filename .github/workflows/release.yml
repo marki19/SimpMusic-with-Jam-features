@@ -1,0 +1,429 @@
+name: Build Release (Android + Desktop)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'v*'
+  paths-ignore:
+    - 'README.md'
+    - 'fastlane/**'
+    - 'assets/**'
+    - '.github/**/*.md'
+    - '.github/FUNDING.yml'
+    - '.github/ISSUE_TEMPLATE/**'
+
+permissions:
+  contents: write
+
+env:
+  # Desktop builds need Java 21 for mpv/Conveyor, matching Android builds.
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'microsoft'
+
+concurrency:
+  # Prevent concurrent desktop builds from stomping on each other's conveyor output.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Android builds
+  # ---------------------------------------------------------------------------
+  android-full:
+    name: Android Full APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'gradle'
+
+      - name: Write local.properties
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          cat > ./local.properties << 'EOF'
+          SENTRY_DSN=${SENTRY_DSN}
+          SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+          LASTFM_API_KEY=${LASTFM_API_KEY}
+          LASTFM_SECRET=${LASTFM_SECRET}
+          EOF
+
+      - name: Write keystore
+        env:
+          BASE_64_SIGNING_KEY: ${{ secrets.BASE_64_SIGNING_KEY }}
+        run: |
+          echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+
+      - name: Set full build flag
+        run: |
+          cat >> ./gradle.properties << 'EOF'
+
+          isFullBuild=true
+          EOF
+
+      - name: Make scripts executable
+        run: chmod +x ./gradlew ./build_and_sign_apk.sh
+
+      - name: Build & sign Android Full APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: ./build_and_sign_apk.sh --release --full
+
+      - name: Upload Full APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-full-apk
+          path: androidApp/build/outputs/apk/release/*.apk
+
+  android-foss:
+    name: Android FOSS APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'gradle'
+
+      - name: Write keystore
+        env:
+          BASE_64_SIGNING_KEY: ${{ secrets.BASE_64_SIGNING_KEY }}
+        run: |
+          echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+
+      - name: Set foss build flag
+        run: |
+          cat >> ./gradle.properties << 'EOF'
+
+          isFullBuild=false
+          EOF
+
+      - name: Make scripts executable
+        run: chmod +x ./gradlew ./build_and_sign_apk.sh
+
+      - name: Build & sign Android FOSS APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./build_and_sign_apk.sh --release --foss
+
+      - name: Upload FOSS APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-foss-apk
+          path: androidApp/build/outputs/apk/release/*.apk
+
+  # ---------------------------------------------------------------------------
+  # Desktop Linux build (AppImage) — runs on ubuntu (glibc, native)
+  # ---------------------------------------------------------------------------
+  desktop-linux:
+    name: Desktop Linux x86_64
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'gradle'
+
+      - name: Set full build flag
+        run: |
+          cat >> ./gradle.properties << 'EOF'
+
+          isFullBuild=true
+          EOF
+
+      # Conveyor needs a user-key to build. On first run it prompts for a
+      # passphrase; GITHUB_TOKEN is a fine substitute here since it is already
+      # write-scoped and used only to authenticate the Conveyor HTTP requests.
+      - name: Authenticate Conveyor
+        env:
+          CONVEYOR_LICENSE_KEY: ${{ secrets.CONVEYOR_LICENSE_KEY }}
+        run: |
+          mkdir -p ~/.config/conveyor
+          echo "${CONVEYOR_LICENSE_KEY:-oss}" > ~/.config/conveyor/license-key.conf
+
+      - name: Setup mpv natives
+        run: ./gradlew :composeApp:mpvSetupAll --no-configuration-cache
+
+      - name: Write Conveyor config
+        run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
+
+      - name: Build Linux AppImage
+        run: |
+          conveyor --agree-to-license=1 \
+            -Kapp.machines=linux.amd64.glibc \
+            make linux-app
+
+      - name: Package as AppImage
+        run: ./gradlew :desktopApp:packageConveyorAppImage --no-configuration-cache
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux-appimage
+          path: desktopApp/build/appimage/*.AppImage
+
+  # ---------------------------------------------------------------------------
+  # Desktop Windows build (MSIX) — runs on ubuntu (Conveyor can cross-compile)
+  # ---------------------------------------------------------------------------
+  desktop-windows:
+    name: Desktop Windows x86_64
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'gradle'
+
+      - name: Set full build flag
+        run: |
+          cat >> ./gradle.properties << 'EOF'
+
+          isFullBuild=true
+          EOF
+
+      - name: Authenticate Conveyor
+        env:
+          CONVEYOR_LICENSE_KEY: ${{ secrets.CONVEYOR_LICENSE_KEY }}
+        run: |
+          mkdir -p ~/.config/conveyor
+          echo "${CONVEYOR_LICENSE_KEY:-oss}" > ~/.config/conveyor/license-key.conf
+
+      - name: Setup mpv natives
+        run: ./gradlew :composeApp:mpvSetupAll --no-configuration-cache
+
+      - name: Write Conveyor config
+        run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
+
+      - name: Build Windows MSIX
+        run: |
+          conveyor --agree-to-license=1 \
+            -Kapp.machines=windows.amd64 \
+            make windows-msix
+
+      - name: Find MSIX output
+        id: find-msix
+        run: |
+          MSIX=$(find output -name '*.msix' -type f | head -1)
+          echo "msix_path=$MSIX" >> "$GITHUB_OUTPUT"
+          echo "Found: $MSIX"
+
+      - name: Upload Windows MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-msix
+          path: output/*.msix
+
+  # ---------------------------------------------------------------------------
+  # Desktop macOS builds — runs on macos-latest (cross-build not supported)
+  # ---------------------------------------------------------------------------
+  desktop-macos:
+    name: Desktop macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'gradle'
+
+      - name: Set full build flag
+        run: |
+          cat >> ./gradle.properties << 'EOF'
+
+          isFullBuild=true
+          EOF
+
+      - name: Authenticate Conveyor
+        env:
+          CONVEYOR_LICENSE_KEY: ${{ secrets.CONVEYOR_LICENSE_KEY }}
+        run: |
+          mkdir -p ~/.config/conveyor
+          echo "${CONVEYOR_LICENSE_KEY:-oss}" > ~/.config/conveyor/license-key.conf
+
+      - name: Setup mpv natives
+        run: ./gradlew :composeApp:mpvSetupAll --no-configuration-cache
+
+      - name: Write Conveyor config
+        run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
+
+      - name: Build macOS Intel
+        run: |
+          conveyor --agree-to-license=1 \
+            -Kapp.machines=mac.amd64 \
+            make unnotarized-mac-zip
+
+      - name: Build macOS Apple Silicon
+        run: |
+          conveyor --agree-to-license=1 \
+            -Kapp.machines=mac.aarch64 \
+            make unnotarized-mac-zip
+
+      - name: Upload macOS zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-zip
+          path: output/*.zip
+
+  # ---------------------------------------------------------------------------
+  # Publish all artifacts to a GitHub Release
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - android-full
+      - android-foss
+      - desktop-linux
+      - desktop-windows
+      - desktop-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read app version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(grep '^version-name' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+            echo "version=v$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Android Full APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-full-apk
+          path: release
+
+      - name: Download Android FOSS APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-foss-apk
+          path: release
+
+      - name: Download Linux AppImage
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux-appimage
+          path: release
+
+      - name: Download Windows MSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows-msix
+          path: release
+
+      - name: Download macOS zips
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-macos-zip
+          path: release
+
+      - name: List all release files
+        run: ls -lh release/
+
+      - name: Generate release body
+        id: body
+        run: |
+          cat << 'BODY' > release_body.md
+          ## Download SimpMusic
+
+          Download the appropriate package for your platform below.
+
+          ### Android
+
+          | Variant | Description |
+          |---------|-------------|
+          | **Full** | Includes Sentry crash reporting and Last.fm scrobbling |
+          | **FOSS** | No tracking, compatible with F-Droid |
+
+          > ⚠️ **Important**: Android 12+ required for the best experience (blur effects, etc.)
+
+          ### Desktop
+
+          | Platform | Architecture | Download |
+          |----------|-------------|----------|
+          | **Windows** | x86_64 | `SimpMusic-*.msix` (Windows 10+) |
+          | **macOS** | Intel | `SimpMusic-*-mac-amd64.zip` |
+          | **macOS** | Apple Silicon | `SimpMusic-*-mac-aarch64.zip` |
+          | **Linux** | x86_64 | `SimpMusic-x86_64.AppImage` |
+
+          > **Note for Linux**: Make the AppImage executable (`chmod +x SimpMusic-x86_64.AppImage`) and run it.
+          >
+          > **Note for Windows**: Enable "Sideload apps" in Windows Settings → For developers, then double-click the `.msix` to install.
+
+          ### Release Notes
+
+          See the [CHANGELOG](https://github.com/maxrave-dev/SimpMusic/blob/main/CHANGELOG.md) for full details.
+          BODY
+          echo "body_file=release_body.md" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: SimpMusic ${{ steps.version.outputs.version }}
+          body_path: ${{ steps.body.outputs.body_file }}
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
