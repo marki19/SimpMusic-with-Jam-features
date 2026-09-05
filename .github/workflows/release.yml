@@ -2,6 +2,12 @@ name: Build Release (Android + Desktop)
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish to GitHub Releases? (true to publish, false to only build and upload artifacts)'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - 'main'
@@ -19,18 +25,16 @@ permissions:
   contents: write
 
 env:
-  # Desktop builds need Java 21 for mpv/Conveyor, matching Android builds.
   JAVA_VERSION: '21'
   JAVA_DISTRIBUTION: 'microsoft'
 
 concurrency:
-  # Prevent concurrent desktop builds from stomping on each other's conveyor output.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Android builds
+  # Android Full APK Build & Sign
   # ---------------------------------------------------------------------------
   android-full:
     name: Android Full APK
@@ -57,7 +61,7 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
         run: |
-          cat > ./local.properties << 'EOF'
+          cat > ./local.properties << EOF
           SENTRY_DSN=${SENTRY_DSN}
           SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
           LASTFM_API_KEY=${LASTFM_API_KEY}
@@ -68,14 +72,15 @@ jobs:
         env:
           BASE_64_SIGNING_KEY: ${{ secrets.BASE_64_SIGNING_KEY }}
         run: |
-          echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+          if [ -n "$BASE_64_SIGNING_KEY" ]; then
+            echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+          else
+            echo "BASE_64_SIGNING_KEY not set. An automated self-signed keystore will be generated."
+          fi
 
       - name: Set full build flag
         run: |
-          cat >> ./gradle.properties << 'EOF'
-
-          isFullBuild=true
-          EOF
+          sed -i 's/isFullBuild=false/isFullBuild=true/g' ./gradle.properties || echo "isFullBuild=true" >> ./gradle.properties
 
       - name: Make scripts executable
         run: chmod +x ./gradlew ./build_and_sign_apk.sh
@@ -94,6 +99,9 @@ jobs:
           name: android-full-apk
           path: androidApp/build/outputs/apk/release/*.apk
 
+  # ---------------------------------------------------------------------------
+  # Android FOSS APK Build & Sign
+  # ---------------------------------------------------------------------------
   android-foss:
     name: Android FOSS APK
     runs-on: ubuntu-latest
@@ -116,14 +124,15 @@ jobs:
         env:
           BASE_64_SIGNING_KEY: ${{ secrets.BASE_64_SIGNING_KEY }}
         run: |
-          echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+          if [ -n "$BASE_64_SIGNING_KEY" ]; then
+            echo "$BASE_64_SIGNING_KEY" | base64 -d > simpmusic.jks
+          else
+            echo "BASE_64_SIGNING_KEY not set. An automated self-signed keystore will be generated."
+          fi
 
       - name: Set foss build flag
         run: |
-          cat >> ./gradle.properties << 'EOF'
-
-          isFullBuild=false
-          EOF
+          sed -i 's/isFullBuild=true/isFullBuild=false/g' ./gradle.properties || echo "isFullBuild=false" >> ./gradle.properties
 
       - name: Make scripts executable
         run: chmod +x ./gradlew ./build_and_sign_apk.sh
@@ -142,10 +151,10 @@ jobs:
           path: androidApp/build/outputs/apk/release/*.apk
 
   # ---------------------------------------------------------------------------
-  # Desktop Windows build (MSIX) — runs on ubuntu (Conveyor can cross-compile)
+  # Desktop cross-OS packages via Conveyor (Linux AppImage + Mac zip + Windows MSIX)
   # ---------------------------------------------------------------------------
-  desktop-windows:
-    name: Desktop Windows x86_64
+  desktop-packages:
+    name: Desktop Packages (Linux, Mac, Windows)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -162,54 +171,213 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: 'gradle'
 
+      - name: Install libfuse2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+
       - name: Set full build flag
         run: |
-          cat >> ./gradle.properties << 'EOF'
+          sed -i 's/isFullBuild=false/isFullBuild=true/g' ./gradle.properties || echo "isFullBuild=true" >> ./gradle.properties
 
-          isFullBuild=true
+      - name: Write local.properties
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_JVM || secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          cat > ./local.properties << EOF
+          SENTRY_DSN=${SENTRY_DSN}
+          SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+          LASTFM_API_KEY=${LASTFM_API_KEY}
+          LASTFM_SECRET=${LASTFM_SECRET}
           EOF
 
-      - name: Authenticate Conveyor
-        env:
-          CONVEYOR_LICENSE_KEY: ${{ secrets.CONVEYOR_LICENSE_KEY }}
-        run: |
-          mkdir -p ~/.config/conveyor
-          echo "${CONVEYOR_LICENSE_KEY:-oss}" > ~/.config/conveyor/license-key.conf
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
-      - name: Setup mpv natives
+      - name: Generate aboutLibraries.json
+        run: ./gradlew exportLibraryDefinitions --no-configuration-cache
+
+      - name: Cache mpv-natives
+        uses: actions/cache@v4
+        with:
+          path: mpv-natives
+          key: mpv-natives-${{ hashFiles('composeApp/build.gradle.kts') }}
+
+      - name: Populate mpv-natives for all OSes
         run: ./gradlew :composeApp:mpvSetupAll --no-configuration-cache
 
-      - name: Write Conveyor config
+      - name: Generate Conveyor config
         run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
 
-      - name: Build Windows MSIX
+      - name: Install Conveyor
         run: |
-          conveyor --agree-to-license=1 \
-            -Kapp.machines=windows.amd64 \
-            make windows-msix
+          CONVEYOR_VERSION="22.2"
+          wget -q https://downloads.hydraulic.dev/conveyor/conveyor-${CONVEYOR_VERSION}-linux-amd64.tar.gz
+          sudo mkdir -p /opt/conveyor
+          sudo tar -xzf conveyor-${CONVEYOR_VERSION}-linux-amd64.tar.gz -C /opt/conveyor --strip-components=1
+          echo "/opt/conveyor/bin" >> "$GITHUB_PATH"
 
-      - name: Find MSIX output
-        id: find-msix
+      - name: Setup Conveyor Signing Key
+        env:
+          CONVEYOR_SIGNING_KEY: ${{ secrets.CONVEYOR_SIGNING_KEY }}
         run: |
-          MSIX=$(find output -name '*.msix' -type f | head -1)
-          echo "msix_path=$MSIX" >> "$GITHUB_OUTPUT"
-          echo "Found: $MSIX"
+          mkdir -p ~/.config/conveyor
+          if [ -n "$CONVEYOR_SIGNING_KEY" ]; then
+            echo "app.signing-key = \"$CONVEYOR_SIGNING_KEY\"" > ~/.config/conveyor/defaults.conf
+          else
+            echo "CONVEYOR_SIGNING_KEY not provided. Generating temporary root key for signing..."
+            conveyor keys generate --passphrase=""
+          fi
+
+      - name: Build Linux app
+        run: |
+          conveyor --agree-to-license=1 -Kapp.machines=linux.amd64.glibc make linux-app
+
+      - name: Wrap Linux app tree to AppImage
+        run: ./gradlew :desktopApp:packageConveyorAppImage --no-configuration-cache
+
+      - name: Build Mac and Windows packages
+        run: |
+          conveyor --agree-to-license=1 '-Kapp.machines=[mac.amd64,mac.aarch64,windows.amd64] make site'
+
+      - name: Stage AppImage into output/
+        run: cp desktopApp/build/appimage/conveyor/SimpMusic-*.AppImage output/
+
+      - name: Bundle Windows offline installer
+        run: |
+          set -euo pipefail
+          if [ ! -f output/simpmusic.crt ]; then
+            echo "::error::output/simpmusic.crt missing — Conveyor signing must have failed"
+            exit 1
+          fi
+          msix=$(ls output/simpmusic-*.x64.msix 2>/dev/null | head -1)
+          if [ -z "$msix" ]; then
+            echo "::error::No simpmusic-*.x64.msix found in output/"
+            exit 1
+          fi
+          mkdir -p installers/
+          stage="$(mktemp -d)"
+          cp scripts/windows/install.bat "$stage/"
+          cp output/simpmusic.crt        "$stage/"
+          cp "$msix"                      "$stage/"
+          ( cd "$stage" && zip -q -j \
+            "${GITHUB_WORKSPACE}/installers/SimpMusic-Windows-installer.zip" \
+            install.bat simpmusic.crt "$(basename "$msix")" )
+          rm -rf "$stage"
+          ls -lh installers/
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux-appimage
+          path: output/SimpMusic-*.AppImage
+
+      - name: Upload Windows offline installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-installer
+          path: installers/SimpMusic-Windows-installer.zip
 
       - name: Upload Windows MSIX
         uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-msix
-          path: output/*.msix
+          path: output/simpmusic-*.x64.msix
+
+      - name: Upload macOS zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac-zips
+          path: output/*.zip
 
   # ---------------------------------------------------------------------------
-  # Publish all artifacts to a GitHub Release
+  # Wrap macOS .zip → .dmg (macOS runner for create-dmg + hdiutil)
+  # ---------------------------------------------------------------------------
+  wrap-mac-dmg:
+    name: Wrap macOS .zip to .dmg
+    runs-on: macos-14
+    needs: desktop-packages
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install create-dmg + ImageMagick
+        run: brew install create-dmg imagemagick
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(grep '^version-name' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "App version: $VERSION"
+
+      - name: Download Mac .zip artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-mac-zips
+          path: mac-zips
+
+      - name: Prepare background
+        run: |
+          mkdir -p build/dmg
+          magick composeApp/icon/dmg-background.png \
+            -filter Lanczos -resize 1400x800 \
+            build/dmg/dmg-bg-1400x800.png
+
+      - name: Make scripts executable
+        run: chmod +x scripts/wrap-mac-dmg.sh
+
+      - name: Wrap each Mac .zip into .dmg
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          shopt -s nullglob
+          for zip in mac-zips/simpmusic-*-mac-*.zip; do
+            arch="$(basename "$zip" | sed -nE 's/.*-mac-([a-z0-9]+)\.zip/\1/p')"
+            [[ -z "$arch" ]] && { echo "Cannot infer arch from $zip" >&2; exit 1; }
+            workdir="$(mktemp -d)"
+            unzip -q "$zip" -d "$workdir"
+            app="$(find "$workdir" -maxdepth 2 -type d -name '*.app' | head -1)"
+            [[ -d "$app" ]] || { echo "No .app inside $zip" >&2; exit 1; }
+            out="dist/SimpMusic-${VERSION}-mac-${arch}.dmg"
+            scripts/wrap-mac-dmg.sh \
+              "$app" \
+              build/dmg/dmg-bg-1400x800.png \
+              composeApp/icon/circle_app_icon.icns \
+              "$out"
+            rm -rf "$workdir"
+          done
+          ls -lh dist/
+
+      - name: Upload Mac .dmg artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac-dmg
+          path: dist/*.dmg
+
+  # ---------------------------------------------------------------------------
+  # Publish Release (Triggered on tag push or manual dispatch with publish flag)
   # ---------------------------------------------------------------------------
   publish:
     name: Publish GitHub Release
+    if: |
+      (always() && !cancelled()) &&
+      (needs.android-full.result == 'success') &&
+      (needs.android-foss.result == 'success') &&
+      (needs.desktop-packages.result == 'success') &&
+      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true))
     needs:
       - android-full
       - android-foss
-      - desktop-windows
+      - desktop-packages
+      - wrap-mac-dmg
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -238,10 +406,36 @@ jobs:
           name: android-foss-apk
           path: release
 
+      - name: Download Windows offline installer
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows-installer
+          path: release
+
       - name: Download Windows MSIX
         uses: actions/download-artifact@v4
         with:
           name: desktop-windows-msix
+          path: release
+
+      - name: Download Linux AppImage
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux-appimage
+          path: release
+
+      - name: Download Mac DMG
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: desktop-mac-dmg
+          path: release
+
+      - name: Download Mac Zips (fallback if DMG not present)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: desktop-mac-zips
           path: release
 
       - name: List all release files
@@ -264,13 +458,17 @@ jobs:
 
           > ⚠️ **Important**: Android 12+ required for the best experience (blur effects, etc.)
 
-          ### Windows
+          ### Desktop
 
-          | Architecture | Download |
-          |----------|-------------|
-          | x86_64 | `SimpMusic-*.msix` (Windows 10+) |
+          | Platform | Architecture | Package |
+          |----------|-------------|---------|
+          | **Windows** | x86_64 | `SimpMusic-Windows-installer.zip` (Offline installer: includes cert + MSIX) / `simpmusic-*.x64.msix` |
+          | **macOS** | Intel / Apple Silicon | `SimpMusic-*-mac-*.dmg` |
+          | **Linux** | x86_64 | `SimpMusic-*-x86_64.AppImage` |
 
-          > **Note for Windows**: Enable "Sideload apps" in Windows Settings → For developers, then double-click the `.msix` to install.
+          > **Note for Windows**: Extract `SimpMusic-Windows-installer.zip` and run `install.bat` (or sideload the `.msix` directly after enabling developer mode).
+          >
+          > **Note for Linux**: Make the AppImage executable (`chmod +x SimpMusic-*.AppImage`) and run it.
 
           ### Release Notes
 

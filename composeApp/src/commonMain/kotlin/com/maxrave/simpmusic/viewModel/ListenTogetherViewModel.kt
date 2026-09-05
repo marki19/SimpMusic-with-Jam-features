@@ -323,9 +323,10 @@ class ListenTogetherViewModel(
     fun seekTo(position: Long) = viewModelScope.launch { mediaPlayerHandler.onPlayerEvent(PlayerEvent.UpdateProgress(position.toFloat())) }
 
     fun skipPrevious() {
-        viewModelScope.launch {
-            // Seek to 0 so the host publishes the seek, and all members rewind.
-            mediaPlayerHandler.onPlayerEvent(PlayerEvent.UpdateProgress(0f))
+        val state = repository.room.value
+        val canControl = state.isHost || state.permissions.allowPlayPause || state.permissions.allowSeek
+        if (canControl) {
+            repository.seekTo(0L)
         }
     }
 
@@ -338,10 +339,14 @@ class ListenTogetherViewModel(
     }
 
     fun skipNext() {
-        val currentQueue = repository.room.value.queue
-        if (currentQueue.isNotEmpty()) {
-            val nextTrack = currentQueue.first()
-            playQueuedSong(0, nextTrack)
+        val state = repository.room.value
+        val canControl = state.isHost || state.permissions.allowPlayPause || state.permissions.allowPlayDirect
+        if (canControl) {
+            val currentQueue = state.queue
+            if (currentQueue.isNotEmpty()) {
+                val nextTrack = currentQueue.first()
+                repository.playQueuedTrack(0, nextTrack)
+            }
         }
     }
 
