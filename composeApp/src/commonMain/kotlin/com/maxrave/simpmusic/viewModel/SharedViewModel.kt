@@ -467,12 +467,13 @@ class SharedViewModel(
 
                             is SimpleMediaState.Progress -> {
                                 if (mediaState.progress >= 0L && mediaState.progress != _timeline.value.current) {
+                                    val isJamWaiting = listenTogetherRepository.room.value.let { it.inRoom && it.waitingFor.isNotEmpty() }
                                     if (_timeline.value.total > 0L) {
                                         _timeline.update {
                                             it.copy(
                                                 total = mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: it.total,
                                                 current = mediaState.progress,
-                                                loading = false,
+                                                loading = isJamWaiting,
                                             )
                                         }
                                     } else {
@@ -504,10 +505,11 @@ class SharedViewModel(
                             }
 
                             is SimpleMediaState.Ready -> {
+                                val isJamWaiting = listenTogetherRepository.room.value.let { it.inRoom && it.waitingFor.isNotEmpty() }
                                 _timeline.update {
                                     it.copy(
                                         current = mediaPlayerHandler.getProgress(),
-                                        loading = false,
+                                        loading = isJamWaiting,
                                         // The player's own duration wins, but ONLY when it has one.
                                         // ExoPlayer answers C.TIME_UNSET (a large negative, not
                                         // null) until it has parsed the container, and Ready is
@@ -547,10 +549,24 @@ class SharedViewModel(
                         }
                     }
                 }
+            val jamBufferBarrierJob =
+                launch {
+                    listenTogetherRepository.room.collectLatest { room ->
+                        if (room.inRoom && room.waitingFor.isNotEmpty()) {
+                            _timeline.update { it.copy(loading = true) }
+                        } else if (room.inRoom && room.waitingFor.isEmpty() && _timeline.value.loading) {
+                            val state = mediaPlayerHandler.simpleMediaState.value
+                            if (state is SimpleMediaState.Ready || state is SimpleMediaState.Progress) {
+                                _timeline.update { it.copy(loading = false) }
+                            }
+                        }
+                    }
+                }
             job1.join()
             controllerJob.join()
             sleepTimerJob.join()
             playlistNameJob.join()
+            jamBufferBarrierJob.join()
         }
         // Reset downloading songs & playlists to not downloaded
         checkAllDownloadingSongs()

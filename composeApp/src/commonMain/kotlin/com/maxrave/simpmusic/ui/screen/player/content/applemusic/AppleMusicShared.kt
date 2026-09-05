@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -580,6 +581,7 @@ internal fun AppleMusicTimesRow(
 @Composable
 internal fun AppleMusicTransportRow(
     controllerState: ControlState,
+    loading: Boolean = false,
     onUIEvent: (UIEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -601,25 +603,30 @@ internal fun AppleMusicTransportRow(
                 modifier = Modifier.size(46.dp),
             )
         }
-        // No loading state on this button. It is play/pause and nothing else: it stays pressable
-        // and keeps showing the transport glyph even while the player is buffering, so the control
-        // never disappears out from under a finger reaching for it.
         Box(
             modifier =
                 Modifier
                     .appleMusicPressInflate()
                     .size(76.dp)
                     .clip(CircleShape)
-                    .clickable { onUIEvent(UIEvent.PlayPause) },
+                    .clickable(enabled = !loading) { onUIEvent(UIEvent.PlayPause) },
             contentAlignment = Alignment.Center,
         ) {
-            Crossfade(targetState = controllerState.isPlaying, label = "appleMusicPlayPauseIcon") { isPlaying ->
-                Icon(
-                    imageVector = if (isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                    contentDescription = "",
-                    tint = Color.White,
-                    modifier = Modifier.size(66.dp),
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(44.dp),
+                    color = Color.White,
+                    strokeWidth = 3.dp,
                 )
+            } else {
+                Crossfade(targetState = controllerState.isPlaying, label = "appleMusicPlayPauseIcon") { isPlaying ->
+                    Icon(
+                        imageVector = if (isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
+                        contentDescription = "",
+                        tint = Color.White,
+                        modifier = Modifier.size(66.dp),
+                    )
+                }
             }
         }
         IconButton(
@@ -789,6 +796,7 @@ internal fun AppleMusicBottomCluster(
             Spacer(modifier = Modifier.height(12.dp))
             AppleMusicTransportRow(
                 controllerState = state.controllerState,
+                loading = state.timelineState.loading,
                 onUIEvent = actions.onUIEvent,
             )
             Spacer(modifier = Modifier.height(14.dp))

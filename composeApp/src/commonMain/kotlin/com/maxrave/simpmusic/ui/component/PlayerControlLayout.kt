@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ fun PlayerControlLayout(
     // light glass surface is nearly invisible.
     activeColor: Color = seed,
     contentColor: Color = Color.White,
+    isLoading: Boolean = false,
     onUIEvent: (UIEvent) -> Unit,
 ) {
     val height = if (isSmallSize) 48.dp else 96.dp
@@ -135,25 +137,37 @@ fun PlayerControlLayout(
                             CircleShape,
                         )
                         .clickable {
-                            onUIEvent(UIEvent.PlayPause)
+                            if (!isLoading) {
+                                onUIEvent(UIEvent.PlayPause)
+                            }
                         },
                 contentAlignment = Alignment.Center,
             ) {
-                Crossfade(targetState = controllerState.isPlaying) { isPlaying ->
-                    if (!isPlaying) {
-                        Icon(
-                            imageVector = if (plainPlayPause) SimpIcons.PlayArrow else SimpIcons.PlayCircle,
-                            tint = contentColor,
-                            contentDescription = "",
-                            modifier = Modifier.size(bigIcon.first),
-                        )
-                    } else {
-                        Icon(
-                            imageVector = if (plainPlayPause) SimpIcons.Pause else SimpIcons.PauseCircle,
-                            tint = contentColor,
-                            contentDescription = "",
-                            modifier = Modifier.size(bigIcon.first),
-                        )
+                Crossfade(targetState = if (isLoading) "loading" else if (controllerState.isPlaying) "pause" else "play", label = "playPauseState") { state ->
+                    when (state) {
+                        "loading" -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(if (plainPlayPause) bigIcon.first else bigIcon.first * 0.7f),
+                                color = contentColor,
+                                strokeWidth = 3.dp,
+                            )
+                        }
+                        "pause" -> {
+                            Icon(
+                                imageVector = if (plainPlayPause) SimpIcons.Pause else SimpIcons.PauseCircle,
+                                tint = contentColor,
+                                contentDescription = "",
+                                modifier = Modifier.size(bigIcon.first),
+                            )
+                        }
+                        else -> {
+                            Icon(
+                                imageVector = if (plainPlayPause) SimpIcons.PlayArrow else SimpIcons.PlayCircle,
+                                tint = contentColor,
+                                contentDescription = "",
+                                modifier = Modifier.size(bigIcon.first),
+                            )
+                        }
                     }
                 }
             }

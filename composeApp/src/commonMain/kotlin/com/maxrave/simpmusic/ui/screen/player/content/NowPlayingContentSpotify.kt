@@ -1185,7 +1185,8 @@ fun NowPlayingContentSpotify(
                                         )
                                         // Control Button Layout
                                         PlayerControlLayout(
-                                            state.controllerState,
+                                            controllerState = state.controllerState,
+                                            isLoading = state.timelineState.loading,
                                         ) {
                                             actions.onUIEvent(it)
                                         }
