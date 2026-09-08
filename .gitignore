@@ -28,6 +28,9 @@ crowdin.yml
 #dev files
 ign.md
 .docs
+conveyor.zip
+diff_output.diff
+temp_original.kt
 # Sentry Config File
 sentry.properties
 /composeApp/build/
