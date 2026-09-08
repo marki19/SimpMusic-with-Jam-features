@@ -49,6 +49,9 @@ class LibraryDynamicPlaylistViewModel(
     private val _listDownloadedSong: MutableStateFlow<List<SongEntity>> = MutableStateFlow(emptyList())
     val listDownloadedSong: StateFlow<List<SongEntity>> get() = _listDownloadedSong
 
+    private val _listRecentlyPlayedSong: MutableStateFlow<List<SongEntity>> = MutableStateFlow(emptyList())
+    val listRecentlyPlayedSong: StateFlow<List<SongEntity>> get() = _listRecentlyPlayedSong
+
     /**
      * One month's top songs, filled in only once a route names the month.
      *
@@ -73,6 +76,7 @@ class LibraryDynamicPlaylistViewModel(
         getFollowedArtist()
         getMostPlayedSong()
         getDownloadedSong()
+        getRecentlyPlayedSong()
     }
 
     private fun getFavoriteSong() {
@@ -113,6 +117,21 @@ class LibraryDynamicPlaylistViewModel(
                         it.downloadedAt ?: REMOVED_SONG_DATE_TIME
                     }
             }
+        }
+    }
+
+    private fun getRecentlyPlayedSong() {
+        viewModelScope.launch {
+            analyticsRepository
+                .getPlaybackEventsByOffset(
+                    offset = 0,
+                    limit = 100,
+                ).collectLatest { events ->
+                    _listRecentlyPlayedSong.value =
+                        events.mapNotNull { event ->
+                            songRepository.getSongById(event.videoId).lastOrNull()
+                        }
+                }
         }
     }
 
@@ -189,6 +208,7 @@ class LibraryDynamicPlaylistViewModel(
                 LibraryDynamicPlaylistType.Downloaded -> listDownloadedSong.value to listDownloadedSong.value.find { it.videoId == videoId }
                 LibraryDynamicPlaylistType.Followed -> return
                 LibraryDynamicPlaylistType.MostPlayed -> listMostPlayedSong.value to listMostPlayedSong.value.find { it.videoId == videoId }
+                LibraryDynamicPlaylistType.RecentlyPlayed -> listRecentlyPlayedSong.value to listRecentlyPlayedSong.value.find { it.videoId == videoId }
                 is LibraryDynamicPlaylistType.MonthlyRecap ->
                     listMonthlyRecapSong.value to listMonthlyRecapSong.value.find { it.videoId == videoId }
                 else -> return
@@ -216,6 +236,7 @@ class LibraryDynamicPlaylistViewModel(
             LibraryDynamicPlaylistType.Favorite -> listFavoriteSong.value
             LibraryDynamicPlaylistType.Downloaded -> listDownloadedSong.value
             LibraryDynamicPlaylistType.MostPlayed -> listMostPlayedSong.value
+            LibraryDynamicPlaylistType.RecentlyPlayed -> listRecentlyPlayedSong.value
             is LibraryDynamicPlaylistType.MonthlyRecap -> listMonthlyRecapSong.value
             else -> emptyList()
         }

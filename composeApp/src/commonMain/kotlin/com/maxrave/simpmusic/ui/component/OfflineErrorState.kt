@@ -167,26 +167,6 @@ fun OfflineErrorState(
                     color = MaterialTheme.colorScheme.background,
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            TextButton(
-                onClick = onOpenDownloaded,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                ),
-            ) {
-                Icon(
-                    imageVector = SimpIcons.Download,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(Res.string.listen_to_downloaded),
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
         }
     }
 }

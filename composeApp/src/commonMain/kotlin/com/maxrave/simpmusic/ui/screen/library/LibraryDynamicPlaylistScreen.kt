@@ -1,6 +1,13 @@
 package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +42,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -50,6 +60,13 @@ import com.maxrave.domain.utils.LocalResource
 import com.maxrave.domain.utils.toArrayListTrack
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.extension.getStringBlocking
+import com.maxrave.simpmusic.extension.getScreenSizeInfo
+import com.maxrave.simpmusic.expect.ui.layerBackdrop
+import com.maxrave.simpmusic.expect.ui.rememberBackdrop
+import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
+import com.maxrave.simpmusic.ui.component.FourImagesMosaic
+import com.maxrave.simpmusic.ui.component.ImageData
+import com.maxrave.simpmusic.ui.component.playlistTitleGradient
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
@@ -100,6 +117,7 @@ import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
 import simpmusic.composeapp.generated.resources.wrapped_recap_subtitle
+import simpmusic.composeapp.generated.resources.your_recently_played
 import simpmusic.composeapp.generated.resources.your_top_albums
 import simpmusic.composeapp.generated.resources.your_top_artists
 import simpmusic.composeapp.generated.resources.your_top_tracks
@@ -137,6 +155,8 @@ fun LibraryDynamicPlaylistScreen(
     var tempDownloaded by remember { mutableStateOf(emptyList<SongEntity>()) }
     val monthlyRecap by viewModel.listMonthlyRecapSong.collectAsStateWithLifecycle()
     var tempMonthlyRecap by remember { mutableStateOf(emptyList<SongEntity>()) }
+    val recentlyPlayed by viewModel.listRecentlyPlayedSong.collectAsStateWithLifecycle()
+    var tempRecentlyPlayed by remember { mutableStateOf(emptyList<SongEntity>()) }
     val analyticsUIState by analyticsViewModel.analyticsUIState.collectAsStateWithLifecycle()
     var tempTopTracks by remember { mutableStateOf(analyticsUIState.topTracks.data ?: emptyList()) }
     var tempTopArtists by remember { mutableStateOf(analyticsUIState.topArtists.data ?: emptyList()) }
@@ -160,11 +180,12 @@ fun LibraryDynamicPlaylistScreen(
         tempFollowed = followed.filter { it.name.contains(query, ignoreCase = true) }
         tempMostPlayed = mostPlayed.filter { it.matches(query) }
         tempDownloaded = downloaded.filter { it.matches(query) }
+        tempRecentlyPlayed = recentlyPlayed.filter { it.matches(query) }
         tempMonthlyRecap = monthlyRecap.filter { it.matches(query) }
         tempTopTracks =
-            analyticsUIState.topTracks.data
-                ?.filter { it.second.matches(query) }
-                ?: emptyList()
+            analyticsUIState.topTracks.data?.filter {
+                it.second.matches(query)
+            } ?: emptyList()
         tempTopArtists =
             analyticsUIState.topArtists.data
                 ?.filter { it.second.name.contains(query, ignoreCase = true) }
@@ -179,8 +200,56 @@ fun LibraryDynamicPlaylistScreen(
         modifier = Modifier.hazeSource(hazeState),
         contentPadding = innerPadding,
     ) {
-        item {
-            Spacer(Modifier.height(64.dp))
+        val typeObj = LibraryDynamicPlaylistType.toType(type)
+        val isSongType = typeObj != LibraryDynamicPlaylistType.Followed && typeObj != LibraryDynamicPlaylistType.TopArtists && typeObj != LibraryDynamicPlaylistType.TopAlbums
+        item(contentType = "header") {
+            val subtitle = when (typeObj) {
+                LibraryDynamicPlaylistType.Favorite -> stringResource(Res.string.album_length, favorite.size.toString(), "")
+                LibraryDynamicPlaylistType.MostPlayed -> stringResource(Res.string.album_length, mostPlayed.size.toString(), "")
+                LibraryDynamicPlaylistType.RecentlyPlayed -> stringResource(Res.string.album_length, recentlyPlayed.size.toString(), "")
+                LibraryDynamicPlaylistType.Downloaded -> stringResource(Res.string.album_length, downloaded.size.toString(), "")
+                LibraryDynamicPlaylistType.Followed -> "${followed.size} ${stringResource(Res.string.artists)}"
+                is LibraryDynamicPlaylistType.MonthlyRecap -> stringResource(Res.string.wrapped_recap_subtitle)
+                else -> null
+            }
+            val images = when (typeObj) {
+                LibraryDynamicPlaylistType.Favorite -> tempFavorite.take(4).map { ImageData(it.thumbnails ?: "", it.title, it.artistName?.joinToString(", ") ?: "", onClick = {}) }
+                LibraryDynamicPlaylistType.RecentlyPlayed -> tempRecentlyPlayed.take(4).map { ImageData(it.thumbnails ?: "", it.title, it.artistName?.joinToString(", ") ?: "", onClick = {}) }
+                LibraryDynamicPlaylistType.MostPlayed -> tempMostPlayed.take(4).map { ImageData(it.thumbnails ?: "", it.title, it.artistName?.joinToString(", ") ?: "", onClick = {}) }
+                LibraryDynamicPlaylistType.Downloaded -> tempDownloaded.take(4).map { ImageData(it.thumbnails ?: "", it.title, it.artistName?.joinToString(", ") ?: "", onClick = {}) }
+                LibraryDynamicPlaylistType.TopTracks -> tempTopTracks.take(4).map { ImageData(it.second.thumbnails ?: "", it.second.title, it.second.artistName?.joinToString(", ") ?: "", onClick = {}) }
+                else -> emptyList()
+            }
+            LibraryDynamicPlaylistHeader(
+                type = typeObj,
+                subtitle = subtitle,
+                images = images,
+                isSongType = isSongType,
+                showSearchBar = showSearchBar,
+                onShowSearchBarChange = { showSearchBar = it },
+                onPlayAll = {
+                    if (typeObj == LibraryDynamicPlaylistType.TopTracks) {
+                        val data = analyticsUIState.topTracks.data
+                        if (!data.isNullOrEmpty()) {
+                            val first = data.first().second
+                            sharedViewModel.setQueueData(QueueData.Data(data.map { it.second }.toArrayListTrack(), first.toTrack(), null, "Your Top Tracks", PlaylistType.RADIO, null))
+                            sharedViewModel.loadMediaItem(first.toTrack(), Config.PLAYLIST_CLICK, 0)
+                        }
+                    } else { viewModel.playAll(typeObj) }
+                },
+                onShuffle = {
+                    if (typeObj == LibraryDynamicPlaylistType.TopTracks) {
+                        val data = analyticsUIState.topTracks.data
+                        if (!data.isNullOrEmpty()) {
+                            val shuffled = data.shuffled()
+                            val first = shuffled.first().second
+                            sharedViewModel.setQueueData(QueueData.Data(shuffled.map { it.second }.toArrayListTrack(), first.toTrack(), null, "Your Top Tracks", PlaylistType.RADIO, null))
+                            sharedViewModel.loadMediaItem(first.toTrack(), Config.PLAYLIST_CLICK, 0)
+                        }
+                    } else { viewModel.shuffle(typeObj) }
+                },
+                navController = navController
+            )
         }
         item {
             AnimatedVisibility(showSearchBar) {
@@ -376,6 +445,14 @@ fun LibraryDynamicPlaylistScreen(
                         }
                     }
 
+                    LibraryDynamicPlaylistType.RecentlyPlayed -> {
+                        if (query.isNotEmpty() && showSearchBar) {
+                            tempRecentlyPlayed
+                        } else {
+                            recentlyPlayed
+                        }
+                    }
+
                     // Kept as an explicit branch rather than an `else`: the three cases above are
                     // reachable only because the `if` chain around this block has already ruled
                     // out every other object, and an `else` here would silently swallow the next
@@ -469,176 +546,42 @@ fun LibraryDynamicPlaylistScreen(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val type = LibraryDynamicPlaylistType.toType(type)
-        val isSongType =
-            type != LibraryDynamicPlaylistType.Followed &&
-                type != LibraryDynamicPlaylistType.TopArtists &&
-                type != LibraryDynamicPlaylistType.TopAlbums
-        // Counts always come from the unfiltered lists, so the subtitle keeps reporting the
-        // library total while the user is typing in the search bar.
-        val subtitle =
-            when (type) {
-                LibraryDynamicPlaylistType.Favorite ->
-                    stringResource(Res.string.album_length, favorite.size.toString(), "")
-                LibraryDynamicPlaylistType.MostPlayed ->
-                    stringResource(Res.string.album_length, mostPlayed.size.toString(), "")
-                LibraryDynamicPlaylistType.Downloaded ->
-                    stringResource(Res.string.album_length, downloaded.size.toString(), "")
-                LibraryDynamicPlaylistType.Followed ->
-                    "${followed.size} ${stringResource(Res.string.artists)}"
-                is LibraryDynamicPlaylistType.MonthlyRecap ->
-                    stringResource(Res.string.wrapped_recap_subtitle)
-                else -> null
-            }
         Box {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = type.title(),
-                            style = typo().titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (subtitle != null) {
-                            Text(
-                                text = subtitle,
-                                style = typo().bodySmall,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    Box(Modifier.padding(horizontal = 5.dp)) {
-                        RippleIconButton(
-                            SimpIcons.ArrowBackIosNew,
-                            Modifier
-                                .size(32.dp),
-                            true,
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        ) {
-                            navController.navigateUp()
-                        }
-                    }
-                },
-                actions = {
-                    if (isSongType) {
-                        RippleIconButton(
-                            SimpIcons.PlayCircle,
-                            Modifier
-                                .size(48.dp),
-                            fillMaxSize = true,
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        ) {
-                            if (type == LibraryDynamicPlaylistType.TopTracks) {
-                                val data = analyticsUIState.topTracks.data
-                                if (!data.isNullOrEmpty()) {
-                                    val first = data.first().second
-                                    sharedViewModel.setQueueData(
-                                        QueueData.Data(
-                                            listTracks = data.map { it.second }.toArrayListTrack(),
-                                            firstPlayedTrack = first.toTrack(),
-                                            playlistId = null,
-                                            playlistName = getStringBlocking(Res.string.your_top_tracks),
-                                            playlistType = PlaylistType.RADIO,
-                                            continuation = null,
-                                        ),
-                                    )
-                                    sharedViewModel.loadMediaItem(
-                                        first.toTrack(),
-                                        Config.PLAYLIST_CLICK,
-                                        0,
-                                    )
-                                }
-                            } else {
-                                viewModel.playAll(type)
-                            }
-                        }
-                        RippleIconButton(
-                            SimpIcons.Shuffle,
-                            Modifier.size(32.dp),
-                            true,
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        ) {
-                            if (type == LibraryDynamicPlaylistType.TopTracks) {
-                                val data = analyticsUIState.topTracks.data
-                                if (!data.isNullOrEmpty()) {
-                                    val shuffled = data.shuffled()
-                                    val first = shuffled.first().second
-                                    sharedViewModel.setQueueData(
-                                        QueueData.Data(
-                                            listTracks = shuffled.map { it.second }.toArrayListTrack(),
-                                            firstPlayedTrack = first.toTrack(),
-                                            playlistId = null,
-                                            playlistName = getStringBlocking(Res.string.your_top_tracks),
-                                            playlistType = PlaylistType.RADIO,
-                                            continuation = null,
-                                        ),
-                                    )
-                                    sharedViewModel.loadMediaItem(
-                                        first.toTrack(),
-                                        Config.PLAYLIST_CLICK,
-                                        0,
-                                    )
-                                }
-                            } else {
-                                viewModel.shuffle(type)
-                            }
-                        }
-                    }
-                    Box(Modifier.padding(horizontal = 5.dp)) {
-                        RippleIconButton(
-                            if (showSearchBar) SimpIcons.Close else SimpIcons.Search,
-                            Modifier
-                                .size(32.dp),
-                            true,
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        ) {
-                            showSearchBar = !showSearchBar
-                        }
-                    }
-                },
-                modifier =
-                    Modifier
-                        .hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
-                            blurEnabled = true
-                        },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                    ),
-            )
-            // Drawn last inside the same Box, with an opaque colour, so it covers the normal bar
-            // instead of pushing it around — the search bar below keeps its position either way.
+            // Drawn inside the overlay Box, with an opaque colour, so it covers the normal bar
             if (selectionState.isActive) {
                 SongSelectionTopAppBar(
                     state = selectionState,
                     onSelectAll = {
                         val visible =
-                            when (type) {
-                                LibraryDynamicPlaylistType.TopTracks ->
-                                    (
-                                        if (query.isNotEmpty() && showSearchBar) {
-                                            tempTopTracks
-                                        } else {
-                                            analyticsUIState.topTracks.data ?: emptyList()
-                                        }
-                                    ).map { it.second.videoId }
+                            when (LibraryDynamicPlaylistType.toType(type)) {
+                                LibraryDynamicPlaylistType.TopTracks -> {
+                                    val list = if (query.isNotEmpty() && showSearchBar) {
+                                        tempTopTracks
+                                    } else {
+                                        analyticsUIState.topTracks.data ?: emptyList()
+                                    }
+                                    list.map { it.second.videoId }
+                                }
 
-                                LibraryDynamicPlaylistType.Downloaded ->
-                                    (if (query.isNotEmpty() && showSearchBar) tempDownloaded else downloaded)
-                                        .map { it.videoId }
+                                LibraryDynamicPlaylistType.Downloaded -> {
+                                    val list = if (query.isNotEmpty() && showSearchBar) tempDownloaded else downloaded
+                                    list.map { it.videoId }
+                                }
 
-                                LibraryDynamicPlaylistType.Favorite ->
-                                    (if (query.isNotEmpty() && showSearchBar) tempFavorite else favorite)
-                                        .map { it.videoId }
+                                LibraryDynamicPlaylistType.Favorite -> {
+                                    val list = if (query.isNotEmpty() && showSearchBar) tempFavorite else favorite
+                                    list.map { it.videoId }
+                                }
 
-                                LibraryDynamicPlaylistType.MostPlayed ->
-                                    (if (query.isNotEmpty() && showSearchBar) tempMostPlayed else mostPlayed)
-                                        .map { it.videoId }
+                                LibraryDynamicPlaylistType.MostPlayed -> {
+                                    val list = if (query.isNotEmpty() && showSearchBar) tempMostPlayed else mostPlayed
+                                    list.map { it.videoId }
+                                }
+
+                                LibraryDynamicPlaylistType.RecentlyPlayed -> {
+                                    val list = if (query.isNotEmpty() && showSearchBar) tempRecentlyPlayed else recentlyPlayed
+                                    list.map { it.videoId }
+                                }
 
                                 else -> emptyList()
                             }
@@ -694,6 +637,8 @@ sealed class LibraryDynamicPlaylistType {
 
     data object MostPlayed : LibraryDynamicPlaylistType()
 
+    data object RecentlyPlayed : LibraryDynamicPlaylistType()
+
     data object Downloaded : LibraryDynamicPlaylistType()
 
     data object TopTracks : LibraryDynamicPlaylistType()
@@ -731,6 +676,7 @@ sealed class LibraryDynamicPlaylistType {
             Favorite -> Res.string.favorite
             Followed -> Res.string.followed
             MostPlayed -> Res.string.most_played
+            RecentlyPlayed -> Res.string.your_recently_played
             Downloaded -> Res.string.downloaded
             TopAlbums -> Res.string.your_top_albums
             TopArtists -> Res.string.your_top_artists
@@ -769,6 +715,7 @@ sealed class LibraryDynamicPlaylistType {
             Favorite -> "favorite"
             Followed -> "followed"
             MostPlayed -> "most_played"
+            RecentlyPlayed -> "recently_played"
             Downloaded -> "downloaded"
             TopAlbums -> "top_albums"
             TopArtists -> "top_artists"
@@ -786,6 +733,7 @@ sealed class LibraryDynamicPlaylistType {
                 "favorite" -> Favorite
                 "followed" -> Followed
                 "most_played" -> MostPlayed
+                "recently_played" -> RecentlyPlayed
                 "downloaded" -> Downloaded
                 "top_albums" -> TopAlbums
                 "top_artists" -> TopArtists
@@ -829,3 +777,170 @@ private fun matchesQuery(
         artists?.any { it.contains(query, ignoreCase = true) } == true
 
 private fun SongEntity.matches(query: String): Boolean = matchesQuery(title, artistName, query)
+
+@Composable
+fun LibraryDynamicPlaylistHeader(
+    type: LibraryDynamicPlaylistType,
+    subtitle: String?,
+    images: List<ImageData>,
+    isSongType: Boolean,
+    showSearchBar: Boolean,
+    onShowSearchBarChange: (Boolean) -> Unit,
+    onPlayAll: () -> Unit,
+    onShuffle: () -> Unit,
+    navController: NavController
+) {
+    val screenInfo = getScreenSizeInfo()
+    val isPortrait = screenInfo.wDP < screenInfo.hDP
+    val titleText = type.title()
+    val mutedPaletteBg = run {
+        val titleColors = playlistTitleGradient(titleText)
+        val base = if (titleColors.size >= 2) {
+            androidx.compose.ui.graphics.lerp(titleColors[0], titleColors[1], 0.5f)
+        } else {
+            titleColors.firstOrNull() ?: Color.Black
+        }
+        androidx.compose.ui.graphics.lerp(base, Color.Black, 0.3f)
+    }
+
+    if (isPortrait) {
+        val headerBackdrop = rememberBackdrop(mutedPaletteBg)
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().layerBackdrop(headerBackdrop)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LiquidGlassIconButton(
+                        backdrop = headerBackdrop,
+                        imageVector = SimpIcons.ArrowBackIosNew,
+                        modifier = Modifier.size(48.dp),
+                        onClick = { navController.navigateUp() }
+                    )
+                    Spacer(Modifier.weight(1f))
+                    LiquidGlassIconButton(
+                        backdrop = headerBackdrop,
+                        imageVector = if (showSearchBar) SimpIcons.Close else SimpIcons.Search,
+                        modifier = Modifier.size(48.dp),
+                        onClick = { onShowSearchBarChange(!showSearchBar) }
+                    )
+                }
+                Box(
+                    modifier = Modifier.size(250.dp).clip(RoundedCornerShape(8.dp))
+                ) {
+                    FourImagesMosaic(images = images)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(text = titleText, style = typo().headlineMedium, color = Color.White, maxLines = 2, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                if (subtitle != null) {
+                    Text(text = subtitle, style = typo().bodyMedium, color = Color(0xC4FFFFFF), textAlign = TextAlign.Center)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                if (isSongType) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                                .clickable { onShuffle() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(imageVector = SimpIcons.Shuffle, contentDescription = "Shuffle", tint = Color.White, modifier = Modifier.size(24.dp))
+                        }
+                        Box(
+                            modifier = Modifier.height(56.dp).widthIn(min = 140.dp).clip(CircleShape).background(Color.White)
+                                .clickable { onPlayAll() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(imageVector = SimpIcons.PlayCircle, contentDescription = "Play", tint = Color.Black, modifier = Modifier.size(24.dp))
+                                Text(text = "Play", style = typo().labelLarge, color = Color.Black)
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    } else {
+        val headerBackdrop = rememberBackdrop(mutedPaletteBg)
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().layerBackdrop(headerBackdrop)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 32.dp, vertical = 16.dp)
+            ) {
+                Spacer(modifier = Modifier.height(64.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box(modifier = Modifier.size(280.dp).clip(RoundedCornerShape(8.dp))) {
+                        FourImagesMosaic(images = images)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = titleText, style = typo().headlineSmall, color = Color.White, maxLines = 2)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        if (subtitle != null) {
+                            Text(text = subtitle, style = typo().bodyMedium, color = Color(0xC4FFFFFF))
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        if (isSongType) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                                        .clickable { onShuffle() },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(imageVector = SimpIcons.Shuffle, contentDescription = "Shuffle", tint = Color.White, modifier = Modifier.size(22.dp))
+                                }
+                                Box(
+                                    modifier = Modifier.height(48.dp).widthIn(min = 110.dp).clip(CircleShape).background(Color.White)
+                                        .clickable { onPlayAll() },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Icon(imageVector = SimpIcons.PlayCircle, contentDescription = "Play", tint = Color.Black, modifier = Modifier.size(20.dp))
+                                        Text(text = "Play", style = typo().labelLarge, color = Color.Black)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 32.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                LiquidGlassIconButton(
+                    backdrop = headerBackdrop,
+                    imageVector = SimpIcons.ArrowBackIosNew,
+                    modifier = Modifier.size(48.dp),
+                    onClick = { navController.navigateUp() }
+                )
+                LiquidGlassIconButton(
+                    backdrop = headerBackdrop,
+                    imageVector = if (showSearchBar) SimpIcons.Close else SimpIcons.Search,
+                    modifier = Modifier.size(48.dp),
+                    onClick = { onShowSearchBarChange(!showSearchBar) }
+                )
+            }
+        }
+    }
+}

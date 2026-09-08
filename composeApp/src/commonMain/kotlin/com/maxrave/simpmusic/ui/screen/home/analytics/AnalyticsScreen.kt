@@ -1095,7 +1095,11 @@ private fun RecentlyPlayedSection(
     if (records.isEmpty()) return
     Column {
         SectionHeader(stringResource(Res.string.your_recently_played), gutter) {
-            navController.navigate(RecentlySongsDestination)
+            navController.navigate(
+                LibraryDynamicPlaylistDestination(
+                    type = com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType.RecentlyPlayed.toStringParams(),
+                ),
+            )
         }
         records.forEach { pair ->
             SongRow(

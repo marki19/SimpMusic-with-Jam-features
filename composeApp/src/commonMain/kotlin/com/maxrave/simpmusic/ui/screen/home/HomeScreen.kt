@@ -541,7 +541,7 @@ fun HomeScreen(
                             onOpenOfflinePlaylist = {
                                 navController.navigate(
                                     LibraryDynamicPlaylistDestination(
-                                        type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
+                                        type = LibraryDynamicPlaylistType.RecentlyPlayed.toStringParams(),
                                     ),
                                 )
                             }

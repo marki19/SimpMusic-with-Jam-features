@@ -133,7 +133,7 @@ private fun LandscapeMosaic(
 }
 
 @Composable
-private fun RowScope.SquareTile(image: ImageData) {
+fun RowScope.SquareTile(image: ImageData) {
     MosaicTile(
         image = image,
         modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -144,7 +144,7 @@ private fun RowScope.SquareTile(image: ImageData) {
  * One tile: artwork cropped to fill, a scrim, and the labels stacked in the bottom-left corner.
  */
 @Composable
-private fun MosaicTile(
+fun MosaicTile(
     image: ImageData,
     modifier: Modifier,
 ) {
@@ -189,7 +189,7 @@ private fun MosaicTile(
 }
 
 @Composable
-private fun MarqueeLine(
+fun MarqueeLine(
     text: String,
     style: TextStyle,
     color: Color?,
